@@ -69,12 +69,12 @@ const navItems = [
     icon: Target,
     group: 'reports'
   },
-  {
-    href: '/calculator',
-    label: 'Calculator',
-    icon: Calculator,
-    group: 'analysis'
-  },
+  // {
+  //   href: '/calculator',
+  //   label: 'Calculator',
+  //   icon: Calculator,
+  //   group: 'analysis'
+  // },
   {
     href: '/sku-breakdown',
     label: 'SKU Analysis',
@@ -162,7 +162,7 @@ export function Navigation({ children }: { children: React.ReactNode }) {
         <SidebarContent className="px-2 group-data-[collapsible=icon]:px-1">
           {renderNavItems()}
         </SidebarContent>
-        <SidebarFooter className="border-t px-4 py-4 group-data-[collapsible=icon]:px-2">
+        {/* <SidebarFooter className="border-t px-4 py-4 group-data-[collapsible=icon]:px-2">
           <div className="flex items-center justify-between">
             <SidebarMenuButton asChild tooltip="Settings">
               <Link href="/settings">
@@ -170,7 +170,7 @@ export function Navigation({ children }: { children: React.ReactNode }) {
                 <span className="group-data-[collapsible=icon]:hidden">Settings</span>
               </Link>
             </SidebarMenuButton>
-            {/* <Button
+            <Button
               variant="ghost"
               size="sm"
               onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
@@ -179,9 +179,9 @@ export function Navigation({ children }: { children: React.ReactNode }) {
               <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
-            </Button> */}
+            </Button>
           </div>
-        </SidebarFooter>
+        </SidebarFooter> */}
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b px-4">

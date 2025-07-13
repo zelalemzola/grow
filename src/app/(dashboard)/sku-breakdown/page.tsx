@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { DataTable } from '@/components/dashboard/DataTable';
@@ -15,17 +14,11 @@ import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   Package,
   TrendingUp,
-  TrendingDown, 
   Search,
-  Filter,
-  Download,
-  Eye,
-  EyeOff,
   Target,
   DollarSign,
   Activity,
   BarChart3,
-  PieChart as PieChartIcon,
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
@@ -35,8 +28,6 @@ import {
 import { 
   calculateKPIs,
   calculateSKUBreakdown,
-  calculatePlatformSpend, 
-  calculateGeographicData,
   formatCurrency,
   formatPercentage,
   formatNumber,
@@ -192,7 +183,7 @@ export default function SKUBreakdownPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as 'revenue' | 'profit' | 'quantity')}
             className="text-xs border rounded px-2 py-1 w-full sm:w-auto"
           >
             <option value="revenue">Sort by Revenue</option>
@@ -248,26 +239,6 @@ export default function SKUBreakdownPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center space-x-2">
               <Activity className="h-4 w-4 text-purple-500" />
-              <span>Avg Profit Margin</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <div className="text-xl sm:text-2xl font-bold">
-              {skuBreakdown.length > 0 
-                ? formatPercentage(skuBreakdown.reduce((sum, sku) => sum + sku.profitMargin, 0) / skuBreakdown.length)
-                : '0%'
-              }
-            </div>
-            <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Across all SKUs
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-              <Target className="h-4 w-4 text-orange-500" />
               <span>Total Quantity</span>
             </CardTitle>
           </CardHeader>
@@ -277,6 +248,26 @@ export default function SKUBreakdownPage() {
             </div>
             <div className="text-xs sm:text-sm text-muted-foreground mt-1">
               Units sold
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="w-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center space-x-2">
+              <Target className="h-4 w-4 text-orange-500" />
+              <span>Avg AOV</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="text-xl sm:text-2xl font-bold">
+              {skuBreakdown.length > 0 
+                ? formatCurrency(skuBreakdown.reduce((sum, sku) => sum + sku.aov, 0) / skuBreakdown.length)
+                : '$0'
+              }
+            </div>
+            <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Average order value
             </div>
           </CardContent>
         </Card>
@@ -349,7 +340,6 @@ export default function SKUBreakdownPage() {
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <Button variant="outline" size="sm" className="text-xs w-full sm:w-auto">
-                <Eye className="h-3 w-3 mr-1" />
                 Columns
               </Button>
               <ExportButton onClick={handleExportSKUs} icon="file" size="sm" className="w-full sm:w-auto">
@@ -406,7 +396,7 @@ export default function SKUBreakdownPage() {
         <Card className="w-full">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-              <TrendingDown className="h-4 w-4 text-red-500" />
+              <TrendingUp className="h-4 w-4 text-red-500" />
               <span>Low Performers</span>
             </CardTitle>
           </CardHeader>

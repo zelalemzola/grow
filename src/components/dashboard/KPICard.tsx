@@ -36,10 +36,7 @@ export function KPICard({
   icon, 
   change, 
   trend,
-  description,
-  breakdown,
-  rawData,
-  onExport
+  description
 }: KPICardProps) {
   const formatValue = (val: number) => {
     switch (format) {
@@ -54,7 +51,7 @@ export function KPICard({
     }
   };
 
-  const cardContent = (
+  return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -80,28 +77,4 @@ export function KPICard({
       </CardContent>
     </Card>
   );
-
-  // If breakdown data is provided, wrap in modal
-  if (breakdown && rawData) {
-    return (
-      <KPIModal 
-        breakdown={{
-          title,
-          value,
-          format,
-          change,
-          trend,
-          description,
-          breakdown,
-          rawData
-        }}
-        onExport={onExport}
-      >
-        {cardContent}
-      </KPIModal>
-    );
-  }
-
-  // Otherwise return regular card
-  return cardContent;
 } 

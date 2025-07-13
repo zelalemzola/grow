@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { KPICard } from '@/components/dashboard/KPICard';
@@ -19,20 +17,12 @@ import { DataTable } from '@/components/dashboard/DataTable';
 import { 
   DollarSign, 
   TrendingUp, 
-  TrendingDown,
-  Users, 
   ShoppingCart,
-  Calendar,
-  Filter,
-  Download,
   AlertTriangle,
   CheckCircle,
-  Clock,
   Target,
   Activity,
   BarChart3,
-  PieChart as PieChartIcon,
-  LineChart,
   ArrowUpRight,
   ArrowDownRight,
   Settings,
@@ -40,7 +30,6 @@ import {
   EyeOff
 } from 'lucide-react';
 import { 
-  fetchAllData, 
   getMockData 
 } from '@/lib/api';
 import { 
@@ -190,32 +179,32 @@ export default function DashboardPage() {
   };
 
   // Generate breakdown data for KPI cards
-  const generateKPIBreakdown = (metric: string, data: any[]) => {
+  const generateKPIBreakdown = (metric: string, data: (Order | AdSpendEntry)[]) => {
     const byDate = data.reduce((acc, item) => {
       const date = item.date;
       if (!acc[date]) acc[date] = 0;
-      acc[date] += (item[metric] as number) || 0;
+      acc[date] += (item as any)[metric] || 0;
       return acc;
     }, {} as Record<string, number>);
 
     const byCountry = data.reduce((acc, item) => {
-      const country = item.country;
+      const country = (item as any).country;
       if (!acc[country]) acc[country] = 0;
-      acc[country] += (item[metric] as number) || 0;
+      acc[country] += (item as any)[metric] || 0;
       return acc;
     }, {} as Record<string, number>);
 
     const bySKU = data.reduce((acc, item) => {
-      const sku = item.sku;
+      const sku = (item as any).sku;
       if (!acc[sku]) acc[sku] = 0;
-      acc[sku] += (item[metric] as number) || 0;
+      acc[sku] += (item as any)[metric] || 0;
       return acc;
     }, {} as Record<string, number>);
 
     const byPlatform = data.reduce((acc, item) => {
-      const platform = item.platform;
+      const platform = (item as any).platform;
       if (!acc[platform]) acc[platform] = 0;
-      acc[platform] += (item[metric] as number) || 0;
+      acc[platform] += (item as any)[metric] || 0;
       return acc;
     }, {} as Record<string, number>);
 
@@ -233,14 +222,14 @@ export default function DashboardPage() {
   const spendBreakdown = generateKPIBreakdown('spend', filteredAdSpend);
 
   // Generate raw data for KPI cards
-  const generateRawData = (metric: string, data: any[]) => {
+  const generateRawData = (metric: string, data: (Order | AdSpendEntry)[]) => {
     return data.map((item, index) => ({
-      id: item.orderId || `item-${index}`,
+      id: (item as any).orderId || `item-${index}`,
       date: item.date,
-      value: item[metric] || 0,
-      country: item.country,
-      sku: item.sku,
-      platform: item.platform
+      value: (item as any)[metric] || 0,
+      country: (item as any).country,
+      sku: (item as any).sku,
+      platform: (item as any).platform
     }));
   };
 
@@ -382,7 +371,7 @@ export default function DashboardPage() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <select 
                   value={chartMetric}
-                  onChange={(e) => setChartMetric(e.target.value as any)}
+                  onChange={(e) => setChartMetric(e.target.value as 'revenue' | 'profit' | 'spend')}
                   className="text-xs border rounded px-2 py-1 w-full sm:w-auto bg-background"
                 >
                   <option value="revenue">Revenue</option>
@@ -391,7 +380,7 @@ export default function DashboardPage() {
                 </select>
                 <select 
                   value={chartType}
-                  onChange={(e) => setChartType(e.target.value as any)}
+                  onChange={(e) => setChartType(e.target.value as 'line' | 'bar' | 'area')}
                   className="text-xs border rounded px-2 py-1 w-full sm:w-auto bg-background"
                 >
                   <option value="line">Line</option>

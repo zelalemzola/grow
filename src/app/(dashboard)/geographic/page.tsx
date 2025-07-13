@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { DataTable } from '@/components/dashboard/DataTable';
@@ -15,29 +14,22 @@ import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   Globe, 
   TrendingUp, 
-  TrendingDown, 
   Search,
-  Filter,
-  Download,
-  Eye,
-  EyeOff,
   Target,
   DollarSign,
   Activity,
   BarChart3,
-  PieChart as PieChartIcon,
   ArrowUpRight,
   ArrowDownRight,
   MapPin,
-  Users
+  Users,
+  Eye
 } from 'lucide-react';
 import { 
   getMockData 
 } from '@/lib/api';
 import { 
   calculateKPIs, 
-  calculateSKUBreakdown, 
-  calculatePlatformSpend, 
   calculateGeographicData,
   formatCurrency,
   formatPercentage,
@@ -192,7 +184,7 @@ export default function GeographicPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as 'revenue' | 'profit' | 'orders')}
             className="text-xs border rounded px-2 py-1 w-full sm:w-auto"
           >
             <option value="revenue">Sort by Revenue</option>

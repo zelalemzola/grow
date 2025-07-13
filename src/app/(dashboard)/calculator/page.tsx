@@ -4,10 +4,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -18,31 +16,12 @@ import { AreaChart } from '@/components/dashboard/AreaChart';
 import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   Calculator,
-  TrendingUp, 
-  TrendingDown,
   DollarSign,
-  Target,
-  Activity,
-  BarChart3,
-  PieChart as PieChartIcon,
-  LineChart,
-  Download,
-  Plus,
-  Minus,
   X,
-  Divide,
-  Equal,
-  Zap,
-  Eye,
-  EyeOff,
-  Settings,
-  FileText,
-  Download as DownloadIcon
+  Zap
 } from 'lucide-react';
 import { 
-  formatCurrency,
-  formatPercentage,
-  formatNumber
+  formatCurrency
 } from '@/lib/calculations';
 
 interface CalculatorMetric {
@@ -123,7 +102,7 @@ export default function CalculatorPage() {
         
         const result = eval(expression);
         return { ...formula, result: isNaN(result) ? 0 : result };
-      } catch (error) {
+      } catch {
         return { ...formula, result: 0 };
       }
     });
@@ -133,9 +112,9 @@ export default function CalculatorPage() {
 
   useEffect(() => {
     calculateResults();
-  }, [metrics]);
+  }, [metrics, calculateResults]);
 
-  const handleMetricChange = (index: number, field: keyof CalculatorMetric, value: any) => {
+  const handleMetricChange = (index: number, field: keyof CalculatorMetric, value: string | number) => {
     const updatedMetrics = [...metrics];
     updatedMetrics[index] = { ...updatedMetrics[index], [field]: value };
     setMetrics(updatedMetrics);
@@ -248,290 +227,210 @@ export default function CalculatorPage() {
         <CardContent>
           <Tabs value={mode} onValueChange={(value) => setMode(value as 'single' | 'combined')}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="single">Single Metric Mode</TabsTrigger>
-              <TabsTrigger value="combined">Combined Formula Mode</TabsTrigger>
+              <TabsTrigger value="single">Single Metrics</TabsTrigger>
+              <TabsTrigger value="combined">Combined Results</TabsTrigger>
             </TabsList>
           </Tabs>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Input Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm sm:text-base">
-                {mode === 'single' ? 'Metric Inputs' : 'Formula Builder'}
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={mode === 'single' ? addMetric : addFormula}>
-                <Plus className="h-3 w-3 mr-1" />
-                Add {mode === 'single' ? 'Metric' : 'Formula'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {mode === 'single' ? (
-              // Single Metric Mode
-              <div className="space-y-4">
-                {metrics.map((metric, index) => (
-                  <div key={index} className="flex items-center gap-2 p-3 border rounded-lg">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={metric.name}
-                          onChange={(e) => handleMetricChange(index, 'name', e.target.value)}
-                          placeholder="Metric name"
-                          className="flex-1"
-                        />
-                        <Select
-                          value={metric.type}
-                          onValueChange={(value) => handleMetricChange(index, 'type', value)}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="revenue">Revenue</SelectItem>
-                            <SelectItem value="cost">Cost</SelectItem>
-                            <SelectItem value="spend">Spend</SelectItem>
-                            <SelectItem value="margin">Margin</SelectItem>
-                            <SelectItem value="refunds">Refunds</SelectItem>
-                            <SelectItem value="orders">Orders</SelectItem>
-                            <SelectItem value="roas">ROAS</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          value={metric.value}
-                          onChange={(e) => handleMetricChange(index, 'value', parseFloat(e.target.value) || 0)}
-                          placeholder="Value"
-                          className="flex-1"
-                        />
-                        <Input
-                          value={metric.description || ''}
-                          onChange={(e) => handleMetricChange(index, 'description', e.target.value)}
-                          placeholder="Description"
-                          className="flex-1"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeMetric(index)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              // Combined Formula Mode
-              <div className="space-y-4">
-                {formulas.map((formula, index) => (
-                  <div key={index} className="p-3 border rounded-lg space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Input
-                        value={formula.name}
-                        onChange={(e) => {
-                          const updated = [...formulas];
-                          updated[index].name = e.target.value;
-                          setFormulas(updated);
-                        }}
-                        placeholder="Formula name"
-                        className="flex-1 mr-2"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeFormula(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <Textarea
-                      value={formula.expression}
-                      onChange={(e) => {
-                        const updated = [...formulas];
-                        updated[index].expression = e.target.value;
-                        setFormulas(updated);
-                      }}
-                      placeholder="Formula expression (e.g., Revenue - Cost)"
-                      className="text-sm"
-                    />
-                    <Input
-                      value={formula.description || ''}
-                      onChange={(e) => {
-                        const updated = [...formulas];
-                        updated[index].description = e.target.value;
-                        setFormulas(updated);
-                      }}
-                      placeholder="Description"
-                      className="text-sm"
-                    />
-                    <div className="flex items-center gap-2 text-sm">
-                      <Badge variant="outline">Result: {formatCurrency(formula.result)}</Badge>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Add New Formula */}
-                <div className="p-3 border-2 border-dashed rounded-lg space-y-2">
-                  <Input
-                    value={newFormula.name}
-                    onChange={(e) => setNewFormula({...newFormula, name: e.target.value})}
-                    placeholder="New formula name"
-                  />
-                  <Textarea
-                    value={newFormula.expression}
-                    onChange={(e) => setNewFormula({...newFormula, expression: e.target.value})}
-                    placeholder="Formula expression (e.g., Revenue - Cost)"
-                  />
-                  <Input
-                    value={newFormula.description}
-                    onChange={(e) => setNewFormula({...newFormula, description: e.target.value})}
-                    placeholder="Description"
-                  />
-                  <Button onClick={addFormula} className="w-full">
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Formula
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Results Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm sm:text-base">Results & Visualizations</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {mode === 'single' ? (
-                metrics.slice(0, 4).map((metric, index) => (
-                  <KPICard
-                    key={index}
-                    title={metric.name}
-                    value={metric.value}
-                    format="currency"
-                    icon={<DollarSign className="h-4 w-4" />}
-                    description={metric.description}
-                  />
-                ))
-              ) : (
-                formulas.slice(0, 4).map((formula, index) => (
-                  <KPICard
-                    key={index}
-                    title={formula.name}
-                    value={formula.result}
-                    format="currency"
-                    icon={<Calculator className="h-4 w-4" />}
-                    description={formula.description}
-                  />
-                ))
-              )}
-            </div>
-
-            {/* Chart Controls */}
-            <div className="flex items-center gap-2">
-              <Select value={chartType} onValueChange={(value: string) => setChartType(value as 'bar' | 'pie' | 'area')}>
-                <SelectTrigger className="w-24">
+      {/* Metrics Input Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-sm sm:text-base">Input Metrics</CardTitle>
+            <Button onClick={addMetric} size="sm" className="text-xs">
+              <Calculator className="h-3 w-3 mr-1" />
+              Add Metric
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {metrics.map((metric, index) => (
+            <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-4">
+              <Input
+                placeholder="Metric name"
+                value={metric.name}
+                onChange={(e) => handleMetricChange(index, 'name', e.target.value)}
+                className="text-sm"
+              />
+              <Input
+                type="number"
+                placeholder="Value"
+                value={metric.value}
+                onChange={(e) => handleMetricChange(index, 'value', parseFloat(e.target.value) || 0)}
+                className="text-sm"
+              />
+              <Select
+                value={metric.type}
+                onValueChange={(value) => handleMetricChange(index, 'type', value as CalculatorMetric['type'])}
+              >
+                <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bar">Bar</SelectItem>
-                  <SelectItem value="pie">Pie</SelectItem>
-                  <SelectItem value="area">Area</SelectItem>
+                  <SelectItem value="revenue">Revenue</SelectItem>
+                  <SelectItem value="cost">Cost</SelectItem>
+                  <SelectItem value="spend">Spend</SelectItem>
+                  <SelectItem value="margin">Margin</SelectItem>
+                  <SelectItem value="refunds">Refunds</SelectItem>
+                  <SelectItem value="orders">Orders</SelectItem>
+                  <SelectItem value="roas">ROAS</SelectItem>
                 </SelectContent>
               </Select>
-              
-              {mode === 'single' && (
-                <Select 
-                  value={selectedMetrics.join(',')} 
-                  onValueChange={(value: string) => setSelectedMetrics(value.split(','))}
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Description"
+                  value={metric.description || ''}
+                  onChange={(e) => handleMetricChange(index, 'description', e.target.value)}
+                  className="text-sm flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeMetric(index)}
+                  className="text-xs"
                 >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select metrics to display" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {metrics.map((metric) => (
-                      <SelectItem key={metric.name} value={metric.name}>
-                        {metric.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
-
-            {/* Chart */}
-            <div className="h-64">
-              {chartType === 'bar' && (
-                <BarChart data={chartData} dataKey="value" xAxisDataKey="name" />
-              )}
-              {chartType === 'pie' && (
-                <PieChart data={chartData} />
-              )}
-              {chartType === 'area' && (
-                <AreaChart data={chartData} dataKey="value" xAxisDataKey="name" />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Summary Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm sm:text-base">Summary Table</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2">Name</th>
-                  <th className="text-left p-2">Value</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mode === 'single' ? (
-                  metrics.map((metric, index) => (
-                    <tr key={index} className="border-b">
-                      <td className="p-2 font-medium">{metric.name}</td>
-                      <td className="p-2">{formatCurrency(metric.value)}</td>
-                      <td className="p-2">
-                        <Badge variant="outline">{metric.type}</Badge>
-                      </td>
-                      <td className="p-2 text-muted-foreground">{metric.description || '-'}</td>
-                    </tr>
-                  ))
-                ) : (
-                  formulas.map((formula, index) => (
-                    <tr key={index} className="border-b">
-                      <td className="p-2 font-medium">{formula.name}</td>
-                      <td className="p-2">{formatCurrency(formula.result)}</td>
-                      <td className="p-2">
-                        <Badge variant="outline">Formula</Badge>
-                      </td>
-                      <td className="p-2 text-muted-foreground">{formula.description || '-'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          ))}
         </CardContent>
       </Card>
+
+      {/* Formulas Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-sm sm:text-base">Formulas</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button onClick={addFormula} size="sm" className="text-xs">
+                <Zap className="h-3 w-3 mr-1" />
+                Add Formula
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Add New Formula */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+            <Input
+              placeholder="Formula name"
+              value={newFormula.name}
+              onChange={(e) => setNewFormula({ ...newFormula, name: e.target.value })}
+              className="text-sm"
+            />
+            <Input
+              placeholder="Expression (e.g., Revenue - Cost)"
+              value={newFormula.expression}
+              onChange={(e) => setNewFormula({ ...newFormula, expression: e.target.value })}
+              className="text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Description"
+                value={newFormula.description}
+                onChange={(e) => setNewFormula({ ...newFormula, description: e.target.value })}
+                className="text-sm flex-1"
+              />
+              <Button onClick={addFormula} size="sm" className="text-xs">
+                Add
+              </Button>
+            </div>
+          </div>
+
+          {/* Existing Formulas */}
+          {formulas.map((formula, index) => (
+            <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-4 items-center">
+              <div className="text-sm font-medium">{formula.name}</div>
+              <div className="text-sm text-muted-foreground">{formula.expression}</div>
+              <div className="text-sm font-semibold">{formatCurrency(formula.result)}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-muted-foreground flex-1">{formula.description}</div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeFormula(index)}
+                  className="text-xs"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Chart Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-sm sm:text-base">Visualization</CardTitle>
+            <div className="flex items-center gap-2">
+              <Select value={chartType} onValueChange={(value) => setChartType(value as 'bar' | 'pie' | 'area')}>
+                <SelectTrigger className="w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bar">Bar Chart</SelectItem>
+                  <SelectItem value="pie">Pie Chart</SelectItem>
+                  <SelectItem value="area">Area Chart</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {chartType === 'bar' && (
+            <BarChart 
+              data={chartData}
+              dataKey="value"
+              xAxisDataKey="name"
+            />
+          )}
+          {chartType === 'pie' && (
+            <PieChart data={chartData} />
+          )}
+          {chartType === 'area' && (
+            <AreaChart 
+              data={chartData}
+              dataKey="value"
+              xAxisDataKey="name"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Results Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {mode === 'single' ? (
+          selectedMetrics.map(metricName => {
+            const metric = metrics.find(m => m.name === metricName);
+            return (
+              <KPICard
+                key={metricName}
+                title={metricName}
+                value={metric?.value || 0}
+                change={0}
+                format="currency"
+                icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+              />
+            );
+          })
+        ) : (
+          formulas.map(formula => (
+            <KPICard
+              key={formula.name}
+              title={formula.name}
+              value={formula.result}
+              change={0}
+              format="currency"
+              icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 } 

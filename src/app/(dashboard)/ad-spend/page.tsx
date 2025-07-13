@@ -8,23 +8,17 @@ import { Input } from '@/components/ui/input';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { DataTable } from '@/components/dashboard/DataTable';
-import { BarChart } from '@/components/dashboard/BarChart';
 import { PieChart } from '@/components/dashboard/PieChart';
 import { AreaChart } from '@/components/dashboard/AreaChart';
 import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   DollarSign, 
   TrendingUp, 
-  TrendingDown, 
   Search,
-  Filter,
-  Download,
   Eye,
-  EyeOff,
   Target,
   Activity,
   BarChart3,
-  Calendar,
   ArrowUpRight,
   ArrowDownRight,
   MousePointer,
@@ -38,7 +32,6 @@ import {
   calculateKPIs, 
   calculatePlatformSpend,
   formatCurrency,
-  formatPercentage,
   formatNumber,
   filterData,
   filterAdSpendData
@@ -196,7 +189,7 @@ export default function AdSpendPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as 'date' | 'spend' | 'clicks' | 'impressions')}
             className="text-xs border rounded px-2 py-1 w-full sm:w-auto"
           >
             <option value="date">Sort by Date</option>

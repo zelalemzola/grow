@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { DataTable } from '@/components/dashboard/DataTable';
@@ -15,12 +14,7 @@ import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   FileText,
   TrendingUp,
-  TrendingDown, 
   Search,
-  Filter,
-  Download,
-  Eye,
-  EyeOff,
   Target,
   DollarSign,
   Activity,
@@ -36,9 +30,6 @@ import {
 } from '@/lib/api';
 import { 
   calculateKPIs, 
-  calculateSKUBreakdown, 
-  calculatePlatformSpend, 
-  calculateGeographicData,
   generateChartData,
   formatCurrency,
   formatPercentage,
@@ -220,7 +211,7 @@ export default function OrdersPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as 'orderId' | 'date' | 'revenue' | 'profit')}
             className="text-xs border rounded px-2 py-1 w-full sm:w-auto"
           >
             <option value="date">Sort by Date</option>
@@ -251,7 +242,7 @@ export default function OrdersPage() {
           <CardContent className="p-4 sm:p-6">
             <div className="text-xl sm:text-2xl font-bold">{formatNumber(filteredOrders.length)}</div>
             <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-              In selected period
+              Orders in period
             </div>
           </CardContent>
         </Card>
@@ -266,7 +257,7 @@ export default function OrdersPage() {
           <CardContent className="p-4 sm:p-6">
             <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.grossRevenue)}</div>
             <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-              From all orders
+              Gross revenue
             </div>
           </CardContent>
         </Card>
@@ -274,14 +265,14 @@ export default function OrdersPage() {
         <Card className="w-full">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-              <Activity className="h-4 w-4 text-purple-500" />
-              <span>Average AOV</span>
+              <TrendingUp className="h-4 w-4 text-purple-500" />
+              <span>Net Profit</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.aov)}</div>
+            <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.netProfit)}</div>
             <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Per order
+              After all costs
             </div>
           </CardContent>
         </Card>
@@ -290,13 +281,13 @@ export default function OrdersPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center space-x-2">
               <Target className="h-4 w-4 text-orange-500" />
-              <span>Net Profit</span>
+              <span>Average AOV</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.netProfit)}</div>
+            <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.aov)}</div>
             <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Total profit
+              Order value
             </div>
           </CardContent>
         </Card>

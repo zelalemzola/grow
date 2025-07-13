@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { DataTable } from '@/components/dashboard/DataTable';
@@ -14,18 +13,9 @@ import { AreaChart } from '@/components/dashboard/AreaChart';
 import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   TrendingUp, 
-  TrendingDown, 
-  Calendar,
   DollarSign,
   Activity,
   BarChart3,
-  LineChart,
-  PieChart as PieChartIcon,
-  Download,
-  Filter,
-  Search,
-  Eye,
-  EyeOff,
   Target,
   Globe
 } from 'lucide-react';
@@ -248,14 +238,14 @@ export default function ReportsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center space-x-2">
               <DollarSign className="h-4 w-4 text-orange-500" />
-              <span>Net Profit</span>
+              <span>Average AOV</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.netProfit)}</div>
+            <div className="text-xl sm:text-2xl font-bold">{formatCurrency(kpis.aov)}</div>
             <div className="flex items-center space-x-1 text-xs sm:text-sm text-muted-foreground mt-1">
-              <TrendingDown className="h-3 w-3 text-red-500" />
-              <span>-2.1% from last period</span>
+              <TrendingUp className="h-3 w-3 text-green-500" />
+              <span>+2.3% from last period</span>
             </div>
           </CardContent>
         </Card>
@@ -273,7 +263,7 @@ export default function ReportsPage() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <select 
                   value={chartMetric}
-                  onChange={(e) => setChartMetric(e.target.value as any)}
+                  onChange={(e) => setChartMetric(e.target.value as 'revenue' | 'profit' | 'spend')}
                   className="text-xs border rounded px-2 py-1 w-full sm:w-auto"
                 >
                   <option value="revenue">Revenue</option>
@@ -282,7 +272,7 @@ export default function ReportsPage() {
                 </select>
                 <select 
                   value={chartType}
-                  onChange={(e) => setChartType(e.target.value as any)}
+                  onChange={(e) => setChartType(e.target.value as 'line' | 'bar' | 'area')}
                   className="text-xs border rounded px-2 py-1 w-full sm:w-auto"
                 >
                   <option value="line">Line</option>
@@ -330,7 +320,6 @@ export default function ReportsPage() {
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <Button variant="outline" size="sm" className="text-xs w-full sm:w-auto">
-                <Eye className="h-3 w-3 mr-1" />
                 Columns
               </Button>
               <ExportButton onClick={handleExportOrders} icon="file" size="sm" className="w-full sm:w-auto">

@@ -6,13 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
-import { DataTable } from '@/components/dashboard/DataTable';
 import { BarChart } from '@/components/dashboard/BarChart';
 import { PieChart } from '@/components/dashboard/PieChart';
 import { AreaChart } from '@/components/dashboard/AreaChart';
@@ -20,12 +19,7 @@ import { ExportButton } from '@/components/dashboard/ExportButton';
 import { 
   DollarSign, 
   TrendingUp, 
-  TrendingDown,
   Search,
-  Filter,
-  Download,
-  Eye,
-  EyeOff,
   Target,
   Activity,
   BarChart3,
@@ -33,16 +27,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   MousePointer,
-  Eye as EyeIcon,
   Zap,
   Globe,
   Smartphone,
   Monitor,
   Tablet,
-  Users,
-  Target as TargetIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon
+  Users
 } from 'lucide-react';
 import { 
   getMockData 
@@ -145,7 +135,10 @@ export default function PlatformsPage() {
           impressions: 0,
           clicks: 0,
           revenue: 0,
-          conversions: 0
+          conversions: 0,
+          ctr: 0,
+          roas: 0,
+          cpa: 0
         };
       }
       
@@ -156,9 +149,9 @@ export default function PlatformsPage() {
       acc[entry.platform].conversions += entry.conversions || 0;
       
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, PlatformMetrics>);
 
-    return Object.values(platformData).map((data: any) => ({
+    return Object.values(platformData).map((data) => ({
       ...data,
       ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
       roas: data.spend > 0 ? data.revenue / data.spend : 0,
@@ -250,15 +243,7 @@ export default function PlatformsPage() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <Button
-            variant={comparisonMode ? "default" : "outline"}
-            onClick={() => setComparisonMode(!comparisonMode)}
-            className="w-full sm:w-auto"
-          >
-            <TargetIcon className="h-4 w-4 mr-2" />
-            {comparisonMode ? 'Exit Comparison' : 'Comparison Mode'}
-          </Button>
-          <ExportButton onClick={handleExport} icon="chart" className="w-full sm:w-auto">
+          <ExportButton onClick={handleExport} icon="file" className="w-full sm:w-auto">
             Export Data
           </ExportButton>
         </div>
