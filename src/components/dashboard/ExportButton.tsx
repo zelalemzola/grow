@@ -4,7 +4,7 @@ import { Download, FileText, BarChart3, Globe, Package } from 'lucide-react';
 interface ExportButtonProps {
   onClick: () => void;
   variant?: 'default' | 'outline' | 'secondary';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
   children: React.ReactNode;
   icon?: 'download' | 'file' | 'chart' | 'globe' | 'package';
   className?: string;
@@ -13,7 +13,7 @@ interface ExportButtonProps {
 export function ExportButton({ 
   onClick, 
   variant = 'outline', 
-  size = 'sm', 
+  size = 'default', 
   children, 
   icon = 'download',
   className = ''

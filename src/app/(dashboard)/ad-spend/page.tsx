@@ -101,7 +101,11 @@ export default function AdSpendPage() {
           : new Date(bValue).getTime() - new Date(aValue).getTime();
       }
       
-      return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+      // Convert to numbers for numeric sorting
+      const aNum = Number(aValue) || 0;
+      const bNum = Number(bValue) || 0;
+      
+      return sortOrder === 'asc' ? aNum - bNum : bNum - aNum;
     });
 
   // Calculate metrics

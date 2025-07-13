@@ -9,6 +9,7 @@ import {
   PlatformSpend,
   GeographicData,
   ChartDataPoint,
+  DashboardFilters,
 } from './types';
 
 // Mock data for costs (in real app, this would come from database)
