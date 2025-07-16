@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (!token || !accountId) {
     return NextResponse.json({ error: 'Missing Taboola credentials or account_id' }, { status: 400 });
   }
-  const url = `https://backstage.taboola.com/backstage/api/1.0/${accountId}/conversion_rules`;
+  const url = `https://backstage.taboola.com/backstage/api/1.0/${accountId}/universal_pixel/conversion_rule`;
   try {
     const res = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` },
