@@ -30,9 +30,6 @@ import {
   EyeOff
 } from 'lucide-react';
 import { 
-  getMockData 
-} from '@/lib/api';
-import { 
   calculateKPIs, 
   calculateSKUBreakdown, 
   calculatePlatformSpend, 
@@ -97,9 +94,9 @@ export default function DashboardPage() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const { orders: mockOrders, adSpend: mockAdSpend } = getMockData();
-        setAllOrders(mockOrders);
-        setAllAdSpend(mockAdSpend);
+        // TODO: Replace with real API calls for orders and ad spend
+        setAllOrders([]); // Set to empty until real API is connected
+        setAllAdSpend([]); // Set to empty until real API is connected
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -129,7 +126,7 @@ export default function DashboardPage() {
     };
   });
 
-  const kpis = calculateKPIs(filteredOrders, filteredAdSpend);
+  const kpis = calculateKPIs(filteredOrders, filteredAdSpend, [], []);
   const skuBreakdown = calculateSKUBreakdown(filteredOrders, kpis);
   const platformSpend = calculatePlatformSpend(filteredAdSpend);
   const geographicData = calculateGeographicData(filteredOrders);

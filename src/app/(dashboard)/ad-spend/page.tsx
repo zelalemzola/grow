@@ -26,9 +26,6 @@ import {
   Zap
 } from 'lucide-react';
 import { 
-  getMockData 
-} from '@/lib/api';
-import { 
   calculateKPIs, 
   calculatePlatformSpend,
   formatCurrency,
@@ -63,25 +60,80 @@ export default function AdSpendPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      let allOrders: any[] = [];
+      let allAdSpend: any[] = [];
+      let failedPlatforms: string[] = [];
+      let succeededPlatforms: string[] = [];
+      const fromDate = filters.dateRange.from;
+      const toDate = filters.dateRange.to;
+      // Fetch Taboola
+      let taboolaData: any[] = [];
       try {
-        const { orders: mockOrders, adSpend: mockAdSpend } = getMockData();
-        setAllOrders(mockOrders);
-        setAllAdSpend(mockAdSpend);
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setLoading(false);
+        const response = await fetch(`/api/taboola?fromDate=${fromDate}&toDate=${toDate}`);
+        if (response.ok) {
+          taboolaData = await response.json();
+          if (taboolaData && taboolaData.length > 0) succeededPlatforms.push('Taboola');
+          else failedPlatforms.push('Taboola');
+        } else {
+          failedPlatforms.push('Taboola');
+        }
+      } catch (e) {
+        failedPlatforms.push('Taboola');
       }
+      // Fetch AdUp
+      let adupData: any[] = [];
+      try {
+        const response = await fetch(`/api/adup?fromDate=${fromDate}&toDate=${toDate}`);
+        if (response.ok) {
+          adupData = await response.json();
+          if (adupData && adupData.length > 0) succeededPlatforms.push('AdUp');
+          else failedPlatforms.push('AdUp');
+        } else {
+          failedPlatforms.push('AdUp');
+        }
+      } catch (e) {
+        failedPlatforms.push('AdUp');
+      }
+      // Fetch Outbrain
+      let outbrainData: any[] = [];
+      try {
+        const marketerId = process.env.NEXT_PUBLIC_OUTBRAIN_MARKETER_ID || '';
+        if (marketerId) {
+          const response = await fetch(`/api/outbrain?marketerId=${marketerId}&fromDate=${fromDate}&toDate=${toDate}`);
+          if (response.ok) {
+            outbrainData = await response.json();
+            if (outbrainData && outbrainData.length > 0) succeededPlatforms.push('Outbrain');
+            else failedPlatforms.push('Outbrain');
+          } else {
+            failedPlatforms.push('Outbrain');
+          }
+        } else {
+          failedPlatforms.push('Outbrain');
+        }
+      } catch (e) {
+        failedPlatforms.push('Outbrain');
+      }
+      // Remove the comment about mock data
+      let mergedAdSpend = [
+        ...(taboolaData || []),
+        ...(adupData || []),
+        ...(outbrainData || [])
+      ];
+      setAllAdSpend(mergedAdSpend);
+      setLoading(false);
+      // Log results
+      succeededPlatforms.forEach(p => console.log(`[${p}] Showing real data.`));
+      failedPlatforms.forEach(p => console.error(`[${p}] API failed or returned no data.`));
     };
-
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.dateRange]);
 
   // Apply filters to data
   const filteredOrders = filterData(allOrders, filters);
   const filteredAdSpend = filterAdSpendData(allAdSpend, filters);
 
-  const kpis = calculateKPIs(filteredOrders, filteredAdSpend);
+  const kpis = calculateKPIs(filteredOrders, filteredAdSpend, [], []);
   const platformSpend = calculatePlatformSpend(filteredAdSpend);
 
   // Filter and sort ad spend data
@@ -132,6 +184,19 @@ export default function AdSpendPage() {
     downloadCSV(exportAdSpendToCSV(filteredAdSpend), `ad_spend_${filters.dateRange.from}_to_${filters.dateRange.to}.csv`);
   };
 
+  // Determine Outbrain data status
+  const outbrainEntries = allAdSpend.filter(entry => entry.platform.toLowerCase() === 'outbrain');
+  const outbrainHasRealData = outbrainEntries.length > 0;
+
+  // Log Outbrain data status
+  if (typeof window !== 'undefined') {
+    if (outbrainHasRealData) {
+      console.log('[Outbrain] Showing real Outbrain data.');
+    } else {
+      console.warn('[Outbrain] No real Outbrain data found.');
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
@@ -176,6 +241,18 @@ export default function AdSpendPage() {
           })}
         />
       </div>
+
+      {/* Outbrain Data Status Messages */}
+      {!outbrainHasRealData && (
+        <div className="mb-4 p-3 rounded bg-yellow-100 text-yellow-800 border border-yellow-300 text-sm">
+          <strong>Warning:</strong> Showing <b>no Outbrain data</b>. The Outbrain API is not returning real data. Please check your Outbrain API token, marketer ID, or network connection.
+        </div>
+      )}
+      {outbrainHasRealData && (
+        <div className="mb-4 p-3 rounded bg-green-100 text-green-800 border border-green-300 text-sm">
+          <strong>Success:</strong> Showing <b>real Outbrain data</b> from the Outbrain API.
+        </div>
+      )}
 
       {/* Search and Sort Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

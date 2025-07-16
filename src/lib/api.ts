@@ -13,9 +13,8 @@ import {
 // API Configuration (should be moved to environment variables)
 const API_CONFIG: APIConfig = {
   outbrain: {
-    baseUrl: 'https://api.outbrain.com',
-    username: process.env.OUTBRAIN_USERNAME || '',
-    password: process.env.OUTBRAIN_PASSWORD || '',
+    baseUrl: 'https://api.outbrain.com/amplify/v0.1/',
+    token: process.env.OUTBRAIN_TOKEN || '',
   },
   taboola: {
     baseUrl: 'https://backstage.taboola.com',
@@ -36,24 +35,6 @@ const API_CONFIG: APIConfig = {
 };
 
 // Create axios instances with authentication
-const createOutbrainClient = (): AxiosInstance => {
-  const client = axios.create({
-    baseURL: API_CONFIG.outbrain.baseUrl,
-  });
-
-  // Add Basic Auth interceptor
-  client.interceptors.request.use((config) => {
-    const auth = Buffer.from(
-      `${API_CONFIG.outbrain.username}:${API_CONFIG.outbrain.password}`
-    ).toString('base64');
-    config.headers['Authorization'] = `Basic ${auth}`;
-    config.headers['OB-TOKEN-V1'] = auth; // Outbrain specific header
-    return config;
-  });
-
-  return client;
-};
-
 const createTaboolaClient = async (): Promise<AxiosInstance> => {
   const client = axios.create({
     baseURL: API_CONFIG.taboola.baseUrl,
@@ -123,37 +104,111 @@ const createCheckoutChampClient = (): AxiosInstance => {
   return client;
 };
 
-// API Functions
-export const fetchOutbrainData = async (
-  marketerId: string,
+// Outbrain full integration: fetch marketers, campaigns, budgets, reports, and conversion events
+export const fetchAllOutbrainData = async (
   fromDate: string,
   toDate: string
-): Promise<AdSpendEntry[]> => {
+): Promise<{
+  marketers: any[];
+  campaigns: any[];
+  budgets: any[];
+  reports: any[];
+  conversionEvents: any[];
+  adSpendEntries: AdSpendEntry[];
+}> => {
+  const headers = { 'OB-TOKEN-V1':'MTc1MjM4NDAxODExNzoyZDMwNzc0MzEyMTQ4OTg1OTRlOGRlZDA0MTE1YjQ0MTdlOWY2MGY2MmQxNjFmNTdlODBkODE0YTNmZTU5ZmQwOnsiY2FsbGVyQXBwbGljYXRpb24iOiJBbWVsaWEiLCJpcEFkZHJlc3MiOiIvMTAuMjEyLjEwOS4yNDA6Mzk3NzYiLCJieXBhc3NBcGlBdXRoIjoiZmFsc2UiLCJ1c2VyTmFtZSI6Im1vaGFtZWRAZ3Jvd2V2aXR5LmNvbSIsInVzZXJJZCI6IjEwNzU5NTM5IiwiZGF0YVNvdXJjZVR5cGUiOiJNWV9PQl9DT00ifTozY2I3MzBmYTdiNzg4MTg5NmQxYmE5MDhhZDQ3ZDVkNDc3MTBhOTk1YzI3MTI2NGVhNmMyODdiMDdlNGQwYmExNDBmMTcwMjdhNGYzYjFkZTFhOGFhYzVhYzM4OTFjNmVkNmY4ZjY4N2U2ZjJlYjViNTc5Yjg2MDQ2ODFkM2Y5ZQ==' };
+  const baseUrl = API_CONFIG.outbrain.baseUrl;
   try {
-    const client = createOutbrainClient();
-    const response = await client.get(
-      `/amplify/v0.1/reports/marketers/${marketerId}/campaigns`,
-      {
-        params: {
-          from: fromDate,
-          to: toDate,
-        },
-      }
-    );
+    // 1. Fetch all marketers
+    const marketersRes = await axios.get(baseUrl + 'marketers', { headers });
+    const marketers = marketersRes.data || [];
+    const marketerIds = marketers.map((m: any) => m.id);
+    console.log(marketerIds);
+    let allCampaigns: any[] = [];
+    let allBudgets: any[] = [];
+    let allReports: any[] = [];
+    let allConversionEvents: any[] = [];
+    let adSpendEntries: AdSpendEntry[] = [];
 
-    return response.data.map((item: OutbrainResponse) => ({
-      platform: 'outbrain' as const,
-      campaignId: item.campaignId,
-      campaignName: item.campaignName,
-      date: item.startDate,
-      spend: item.spend,
-      clicks: item.clicks,
-      impressions: item.impressions,
-      currency: item.currency,
-    }));
+    // 2. For each marketer, fetch campaigns, budgets, reports, conversion events
+    for (const marketerId of marketerIds) {
+      // Campaigns
+      const campaignsRes = await axios.get(
+        `${baseUrl}marketers/${marketerId}/campaigns?includeArchived=true&extraFields=CampaignOptimization,Budget`,
+        { headers }
+      );
+      const campaigns = campaignsRes.data || [];
+      allCampaigns = allCampaigns.concat(campaigns);
+
+      // Budgets
+      const budgetsRes = await axios.get(
+        `${baseUrl}marketers/${marketerId}/budgets`,
+        { headers }
+      );
+      const budgets = budgetsRes.data || [];
+      allBudgets = allBudgets.concat(budgets);
+
+      // Reports (performance)
+      const reportsRes = await axios.get(
+        `${baseUrl}report/marketers/${marketerId}/content`,
+        {
+          headers,
+          params: {
+            from: fromDate,
+            to: toDate,
+            includeConversionDetails: true,
+            conversionsByClickDate: true,
+          },
+        }
+      );
+      const reports = reportsRes.data || [];
+      allReports = allReports.concat(reports);
+
+      // Conversion Events
+      const convEventsRes = await axios.get(
+        `${baseUrl}marketers/${marketerId}/conversionEvents`,
+        { headers }
+      );
+      const convEvents = convEventsRes.data || [];
+      allConversionEvents = allConversionEvents.concat(convEvents);
+
+      // Map reports to AdSpendEntry[]
+      adSpendEntries = adSpendEntries.concat(
+        (reports || []).map((item: any) => ({
+          platform: 'outbrain',
+          campaignId: item.contentId || '',
+          campaignName: item.contentName || '',
+          date: item.date || '',
+          spend: item.spend || 0,
+          clicks: item.clicks || 0,
+          impressions: item.impressions || 0,
+          conversions: item.conversions || 0,
+          revenue: item.sumValue || 0,
+          ctr: item.ctr || 0,
+          currency: item.currency || 'USD',
+        }))
+      );
+    }
+
+    // Optionally, join campaigns with budgets by budgetId, etc.
+    return {
+      marketers,
+      campaigns: allCampaigns,
+      budgets: allBudgets,
+      reports: allReports,
+      conversionEvents: allConversionEvents,
+      adSpendEntries,
+    };
   } catch (error) {
-    console.error('Error fetching Outbrain data:', error);
-    return [];
+    console.error('Error fetching Outbrain full data:', error);
+    return {
+      marketers: [],
+      campaigns: [],
+      budgets: [],
+      reports: [],
+      conversionEvents: [],
+      adSpendEntries: [],
+    };
   }
 };
 
@@ -162,7 +217,19 @@ export const fetchTaboolaData = async (
   toDate: string
 ): Promise<AdSpendEntry[]> => {
   try {
-    const client = await createTaboolaClient();
+    // Use static access token if provided
+    const staticToken = process.env.TABOOLA_ACCESS_TOKEN;
+    let client;
+    if (staticToken) {
+      client = axios.create({
+        baseURL: API_CONFIG.taboola.baseUrl,
+        headers: {
+          Authorization: `Bearer ${staticToken}`,
+        },
+      });
+    } else {
+      client = await createTaboolaClient();
+    }
     const response = await client.get(
       `/backstage/api/1.0/${API_CONFIG.taboola.accountId}/reports/campaign-summary/dimensions/day`,
       {
@@ -257,162 +324,23 @@ export const fetchCheckoutChampOrders = async (
 
 // Combined data fetching
 export const fetchAllData = async (
-  filters: DashboardFilters,
-  marketerId?: string
+  filters: DashboardFilters
 ): Promise<{
   orders: Order[];
   adSpend: AdSpendEntry[];
 }> => {
-  const [orders, outbrainData, taboolaData, adUpData] = await Promise.all([
+  const [orders, outbrainFull, taboolaData, adUpData] = await Promise.all([
     fetchCheckoutChampOrders(filters),
-    marketerId
-      ? fetchOutbrainData(marketerId, filters.dateRange.from, filters.dateRange.to)
-      : Promise.resolve([]),
+    fetchAllOutbrainData(filters.dateRange.from, filters.dateRange.to),
     fetchTaboolaData(filters.dateRange.from, filters.dateRange.to),
     fetchAdUpData(filters.dateRange.from, filters.dateRange.to),
   ]);
 
-  const adSpend = [...outbrainData, ...taboolaData, ...adUpData];
+  const adSpend = [
+    ...(outbrainFull?.adSpendEntries || []),
+    ...taboolaData,
+    ...adUpData,
+  ];
 
   return { orders, adSpend };
 };
-
-// Mock data for development/testing
-export const getMockData = () => {
-  // Generate comprehensive mock data for the entire year
-  const startDate = new Date('2025-01-01');
-  const endDate = new Date('2025-12-31');
-  const mockOrders: Order[] = [];
-  const mockAdSpend: AdSpendEntry[] = [];
-
-  // Always include extra orders for June and July 2025
-  const extraStart = new Date('2025-06-01');
-  const extraEnd = new Date('2025-07-31');
-
-  // Generate orders for every day
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0];
-    const isCurrentRange = d >= extraStart && d <= extraEnd;
-    // Generate 3-8 orders per day, but 8-12 for June/July
-    const ordersPerDay = isCurrentRange ? Math.floor(Math.random() * 5) + 8 : Math.floor(Math.random() * 6) + 3;
-    for (let i = 0; i < ordersPerDay; i++) {
-      const skus = ['SKU001', 'SKU002', 'SKU003', 'SKU004', 'SKU005', 'SKU006', 'SKU007', 'SKU008', 'SKU009', 'SKU010'];
-      const countries = ['US', 'CA', 'UK', 'DE', 'FR', 'AU', 'JP', 'BR', 'IT', 'ES', 'NL', 'SE', 'NO', 'MX', 'IN'];
-      const brands = ['Brand A', 'Brand B', 'Brand C', 'Brand D', 'Brand E', 'Brand F', 'Brand G', 'Brand H', 'Brand I', 'Brand J'];
-      const paymentMethods = ['Stripe', 'PayPal', 'Credit Card', 'Apple Pay', 'Google Pay'];
-      const sku = skus[Math.floor(Math.random() * skus.length)];
-      const quantity = Math.floor(Math.random() * 3) + 1;
-      const basePrice = Math.floor(Math.random() * 100) + 20;
-      const total = basePrice * quantity;
-      const usdAmount = total;
-      const refund = Math.random() < 0.05 ? usdAmount : 0; // 5% refund rate
-      const chargeback = Math.random() < 0.02 ? usdAmount : 0; // 2% chargeback rate
-      const upsell = Math.random() < 0.3; // 30% upsell rate
-      mockOrders.push({
-        orderId: `ORD${String(mockOrders.length + 1).padStart(3, '0')}`,
-        date: dateStr,
-        sku,
-        quantity,
-        total,
-        usdAmount,
-        paymentMethod: paymentMethods[Math.floor(Math.random() * paymentMethods.length)],
-        refund,
-        chargeback,
-        upsell,
-        country: countries[Math.floor(Math.random() * countries.length)],
-        brand: brands[Math.floor(Math.random() * brands.length)],
-      });
-    }
-  }
-
-  // Generate ad spend data for every day
-  const platforms = ['outbrain', 'taboola', 'adup'];
-  const campaigns = [
-    'Spring Sale Campaign', 'Brand Awareness', 'Product Launch', 'Valentine Special',
-    'Retargeting Campaign', 'Lookalike Audience', 'Summer Collection', 'Holiday Promotion',
-    'Seasonal Sale', 'Black Friday Prep', 'Cyber Monday', 'New Year Sale',
-    'Back to School', 'Christmas Special', 'New Product Line'
-  ];
-  const countries = ['US', 'CA', 'UK', 'DE', 'FR', 'AU', 'JP', 'BR', 'IT', 'ES', 'NL', 'SE', 'NO', 'MX', 'IN'];
-  const devices = ['Desktop', 'Mobile', 'Tablet'];
-  const adTypes = ['Native', 'Display', 'Video', 'Search'];
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0];
-    const isCurrentRange = d >= extraStart && d <= extraEnd;
-    // Generate 2-4 ad spend entries per day, but 5-7 for June/July
-    const entriesPerDay = isCurrentRange ? Math.floor(Math.random() * 3) + 5 : Math.floor(Math.random() * 3) + 2;
-    for (let i = 0; i < entriesPerDay; i++) {
-      const platform = platforms[Math.floor(Math.random() * platforms.length)];
-      const campaign = campaigns[Math.floor(Math.random() * campaigns.length)];
-      const country = countries[Math.floor(Math.random() * countries.length)];
-      const device = devices[Math.floor(Math.random() * devices.length)];
-      const adType = adTypes[Math.floor(Math.random() * adTypes.length)];
-      // Generate realistic metrics based on platform
-      let spend, clicks, impressions, cpc, cpm, roas, ctr, revenue, conversions;
-      if (platform === 'outbrain') {
-        spend = Math.floor(Math.random() * 2000) + 500;
-        impressions = Math.floor(Math.random() * 200000) + 50000;
-        clicks = Math.floor(impressions * (Math.random() * 0.05 + 0.02)); // 2-7% CTR
-        cpc = Math.random() * 0.5 + 0.1;
-        cpm = spend / (impressions / 1000);
-        ctr = (clicks / impressions) * 100;
-        roas = Math.random() * 3 + 1;
-        revenue = spend * roas;
-        conversions = Math.floor(clicks * (Math.random() * 0.3 + 0.1));
-      } else if (platform === 'taboola') {
-        spend = Math.floor(Math.random() * 1500) + 300;
-        impressions = Math.floor(Math.random() * 50000) + 10000;
-        clicks = Math.floor(impressions * (Math.random() * 0.02 + 0.005)); // 0.5-2.5% CTR
-        cpc = Math.random() * 10 + 5;
-        cpm = spend / (impressions / 1000);
-        ctr = (clicks / impressions) * 100;
-        roas = Math.random() * 2 + 0.5;
-        revenue = spend * roas;
-        conversions = Math.floor(clicks * (Math.random() * 0.2 + 0.05));
-      } else { // adup
-        spend = Math.floor(Math.random() * 1000) + 200;
-        impressions = Math.floor(Math.random() * 150000) + 30000;
-        clicks = Math.floor(impressions * (Math.random() * 0.04 + 0.01)); // 1-5% CTR
-        cpc = Math.random() * 0.3 + 0.1;
-        cpm = spend / (impressions / 1000);
-        ctr = (clicks / impressions) * 100;
-        roas = Math.random() * 4 + 1.5;
-        revenue = spend * roas;
-        conversions = Math.floor(clicks * (Math.random() * 0.4 + 0.2));
-      }
-      mockAdSpend.push({
-        platform: platform as 'outbrain' | 'taboola' | 'adup',
-        campaignId: `CAM${String(mockAdSpend.length + 1).padStart(3, '0')}`,
-        campaignName: campaign,
-        date: dateStr,
-        spend,
-        clicks,
-        impressions,
-        cpc,
-        cpm,
-        roas,
-        ctr,
-        currency: 'USD',
-        campaign,
-        country,
-        device,
-        adType,
-        revenue,
-        conversions,
-      });
-    }
-  }
-  // Debugging output
-  console.log('Generated mock data:', {
-    ordersCount: mockOrders.length,
-    adSpendCount: mockAdSpend.length,
-    dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
-  });
-  const orderDates = [...new Set(mockOrders.map(o => o.date))].sort();
-  const adSpendDates = [...new Set(mockAdSpend.map(a => a.date))].sort();
-  console.log('Order dates:', orderDates.slice(0, 5), '...', orderDates.slice(-5));
-  console.log('Ad spend dates:', adSpendDates.slice(0, 5), '...', adSpendDates.slice(-5));
-  console.log('Total unique order dates:', orderDates.length);
-  console.log('Total unique ad spend dates:', adSpendDates.length);
-  return { orders: mockOrders, adSpend: mockAdSpend };
-}; 

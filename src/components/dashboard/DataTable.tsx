@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
-import React from 'react';
+import React, { isValidElement } from 'react';
 
 interface Column {
   key: string;
@@ -92,6 +92,7 @@ export function DataTable({
   const currentData = sortedData.slice(startIndex, endIndex);
 
   const formatCellValue = (value: any, key: string) => {
+    if (isValidElement(value)) return value;
     if (key.includes('revenue') || key.includes('profit') || key.includes('amount') || key.includes('spend')) {
       return formatCurrency(value);
     }
@@ -104,7 +105,7 @@ export function DataTable({
     if (key === 'date') {
       return new Date(value).toLocaleDateString();
     }
-    return value?.toString() || '-';
+    return typeof value === 'string' || typeof value === 'number' ? value : '-';
   };
 
   const handleSort = (columnKey: string) => {

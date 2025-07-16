@@ -23,9 +23,6 @@ import {
   ArrowDownRight
 } from 'lucide-react';
 import { 
-  getMockData 
-} from '@/lib/api';
-import { 
   calculateKPIs,
   calculateSKUBreakdown,
   formatCurrency,
@@ -61,25 +58,92 @@ export default function SKUBreakdownPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      let allOrders: any[] = [];
+      let allAdSpend: any[] = [];
+      let failedPlatforms: string[] = [];
+      let succeededPlatforms: string[] = [];
+      const fromDate = filters.dateRange.from;
+      const toDate = filters.dateRange.to;
+      // Fetch Checkout Champ Orders
+      let ordersData: any[] = [];
       try {
-        const { orders: mockOrders, adSpend: mockAdSpend } = getMockData();
-        setAllOrders(mockOrders);
-        setAllAdSpend(mockAdSpend);
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setLoading(false);
+        const response = await fetch(`/api/checkoutchamp?from=${fromDate}&to=${toDate}`);
+        if (response.ok) {
+          ordersData = await response.json();
+          if (ordersData && ordersData.length > 0) succeededPlatforms.push('Checkout Champ');
+          else failedPlatforms.push('Checkout Champ');
+        } else {
+          failedPlatforms.push('Checkout Champ');
+        }
+      } catch (e) {
+        failedPlatforms.push('Checkout Champ');
       }
+      // Fetch Ad Spend (Taboola, AdUp, Outbrain)
+      let adSpendData: any[] = [];
+      let taboolaData: any[] = [];
+      let adupData: any[] = [];
+      let outbrainData: any[] = [];
+      // Taboola
+      try {
+        const response = await fetch(`/api/taboola?fromDate=${fromDate}&toDate=${toDate}`);
+        if (response.ok) {
+          taboolaData = await response.json();
+          if (taboolaData && taboolaData.length > 0) succeededPlatforms.push('Taboola');
+          else failedPlatforms.push('Taboola');
+        } else {
+          failedPlatforms.push('Taboola');
+        }
+      } catch (e) {
+        failedPlatforms.push('Taboola');
+      }
+      // AdUp
+      try {
+        const response = await fetch(`/api/adup?fromDate=${fromDate}&toDate=${toDate}`);
+        if (response.ok) {
+          adupData = await response.json();
+          if (adupData && adupData.length > 0) succeededPlatforms.push('AdUp');
+          else failedPlatforms.push('AdUp');
+        } else {
+          failedPlatforms.push('AdUp');
+        }
+      } catch (e) {
+        failedPlatforms.push('AdUp');
+      }
+      // Outbrain
+      try {
+        const marketerId = process.env.NEXT_PUBLIC_OUTBRAIN_MARKETER_ID || '';
+        if (marketerId) {
+          const response = await fetch(`/api/outbrain?marketerId=${marketerId}&fromDate=${fromDate}&toDate=${toDate}`);
+          if (response.ok) {
+            outbrainData = await response.json();
+            if (outbrainData && outbrainData.length > 0) succeededPlatforms.push('Outbrain');
+            else failedPlatforms.push('Outbrain');
+          } else {
+            failedPlatforms.push('Outbrain');
+          }
+        } else {
+          failedPlatforms.push('Outbrain');
+        }
+      } catch (e) {
+        failedPlatforms.push('Outbrain');
+      }
+      adSpendData = [...(taboolaData || []), ...(adupData || []), ...(outbrainData || [])];
+      setAllOrders(ordersData);
+      setAllAdSpend(adSpendData);
+      setLoading(false);
+      // Log results
+      succeededPlatforms.forEach(p => console.log(`[${p}] Showing real data.`));
+      failedPlatforms.forEach(p => console.error(`[${p}] API failed or returned no data.`));
     };
-
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   // Apply filters to data
   const filteredOrders = filterData(allOrders, filters);
   const filteredAdSpend = filterAdSpendData(allAdSpend, filters);
 
-  const kpis = calculateKPIs(filteredOrders, filteredAdSpend);
+  const kpis = calculateKPIs(filteredOrders, filteredAdSpend, [], []);
   const skuBreakdown = calculateSKUBreakdown(filteredOrders, kpis);
 
   console.log('SKU breakdown data:', skuBreakdown); // Debug log
@@ -124,6 +188,9 @@ export default function SKUBreakdownPage() {
     downloadCSV(csvData.map(row => row.join(',')).join('\n'), `sku_breakdown_${filters.dateRange.from}_to_${filters.dateRange.to}.csv`);
   };
 
+  // Determine Outbrain data status
+  const outbrainSuccess = allAdSpend.some(entry => entry.platform === 'outbrain');
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
@@ -154,6 +221,12 @@ export default function SKUBreakdownPage() {
           </ExportButton>
         </div>
       </div>
+      {/* Outbrain Data Status Messages */}
+      {outbrainSuccess && (
+        <div className="mb-4 p-3 rounded bg-green-100 text-green-800 border border-green-300 text-sm">
+          <strong>Success:</strong> Showing <b>real Outbrain data</b> from the Outbrain API.
+        </div>
+      )}
 
       {/* Filters */}
       <FilterPanel 
@@ -297,7 +370,7 @@ export default function SKUBreakdownPage() {
                   data={chartData}
                   dataKey="value"
                   xAxisDataKey="name"
-                />
+            />
               );
             })()}
           </CardContent>

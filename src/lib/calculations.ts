@@ -12,25 +12,13 @@ import {
   DashboardFilters,
 } from './types';
 
-// Mock data for costs (in real app, this would come from database)
-const MOCK_SKU_COSTS: SKUCost[] = [
-  { sku: 'SKU001', unitCogs: 15.00, shippingCost: 5.00, handlingFee: 2.00 },
-  { sku: 'SKU002', unitCogs: 25.00, shippingCost: 8.00, handlingFee: 3.00 },
-];
-
-const MOCK_FIXED_EXPENSES: FixedExpense[] = [
-  { date: '2025-01-15', category: 'Office Rent', amount: 2000.00 },
-  { date: '2025-01-15', category: 'Utilities', amount: 500.00 },
-  { date: '2025-01-15', category: 'Software Licenses', amount: 300.00 },
-];
-
 const PAYMENT_FEE_PERCENTAGE = 0.029; // 2.9% typical Stripe fee
 
 export const calculateKPIs = (
   orders: Order[],
   adSpend: AdSpendEntry[],
-  skuCosts: SKUCost[] = MOCK_SKU_COSTS,
-  fixedExpenses: FixedExpense[] = MOCK_FIXED_EXPENSES
+  skuCosts: SKUCost[],
+  fixedExpenses: FixedExpense[]
 ): KPICalculation => {
   // Basic calculations
   const grossRevenue = orders.reduce((sum, order) => sum + order.usdAmount, 0);

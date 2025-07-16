@@ -35,9 +35,6 @@ import {
   Users
 } from 'lucide-react';
 import { 
-  getMockData 
-} from '@/lib/api';
-import { 
   calculatePlatformSpend,
   formatCurrency,
   formatPercentage,
@@ -74,6 +71,9 @@ interface PlatformFilter {
   };
 }
 
+// Add a utility to get marketerId for Outbrain (from env or config)
+const OUTBRAIN_MARKETER_ID = process.env.NEXT_PUBLIC_OUTBRAIN_MARKETER_ID || '';
+
 export default function PlatformsPage() {
   const [allAdSpend, setAllAdSpend] = useState<AdSpendEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,18 +97,72 @@ export default function PlatformsPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      let allAdSpend: any[] = [];
+      let failedPlatforms: string[] = [];
+      let succeededPlatforms: string[] = [];
+      const fromDate = filters.dateRange.from;
+      const toDate = filters.dateRange.to;
+      // Fetch Taboola
+      let taboolaData: any[] = [];
       try {
-        const { adSpend } = getMockData();
-        setAllAdSpend(adSpend);
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setLoading(false);
+        const response = await fetch(`/api/taboola?fromDate=${fromDate}&toDate=${toDate}`);
+        if (response.ok) {
+          taboolaData = await response.json();
+          if (taboolaData && taboolaData.length > 0) succeededPlatforms.push('Taboola');
+          else failedPlatforms.push('Taboola');
+        } else {
+          failedPlatforms.push('Taboola');
+        }
+      } catch (e) {
+        failedPlatforms.push('Taboola');
       }
+      // Fetch AdUp
+      let adupData: any[] = [];
+      try {
+        const response = await fetch(`/api/adup?fromDate=${fromDate}&toDate=${toDate}`);
+        if (response.ok) {
+          adupData = await response.json();
+          if (adupData && adupData.length > 0) succeededPlatforms.push('AdUp');
+          else failedPlatforms.push('AdUp');
+        } else {
+          failedPlatforms.push('AdUp');
+        }
+      } catch (e) {
+        failedPlatforms.push('AdUp');
+      }
+      // Fetch Outbrain
+      let outbrainData: any[] = [];
+      try {
+        if (OUTBRAIN_MARKETER_ID) {
+          const response = await fetch(`/api/outbrain?marketerId=${OUTBRAIN_MARKETER_ID}&fromDate=${fromDate}&toDate=${toDate}`);
+          if (response.ok) {
+            outbrainData = await response.json();
+            if (outbrainData && outbrainData.length > 0) succeededPlatforms.push('Outbrain');
+            else failedPlatforms.push('Outbrain');
+          } else {
+            failedPlatforms.push('Outbrain');
+          }
+        } else {
+          failedPlatforms.push('Outbrain');
+        }
+      } catch (e) {
+        failedPlatforms.push('Outbrain');
+      }
+      // Remove the comment about mock data
+      let mergedAdSpend = [
+        ...(taboolaData || []),
+        ...(adupData || []),
+        ...(outbrainData || [])
+      ];
+      setAllAdSpend(mergedAdSpend);
+      setLoading(false);
+      // Log results
+      succeededPlatforms.forEach(p => console.log(`[${p}] Showing real data.`));
+      failedPlatforms.forEach(p => console.error(`[${p}] API failed or returned no data.`));
     };
-
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.dateRange]);
 
   // Filter data based on selected filters
   const filteredData = allAdSpend.filter(entry => {
@@ -221,6 +275,9 @@ export default function PlatformsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Determine Outbrain data status
+  const outbrainSuccess = allAdSpend.some(entry => entry.platform === 'outbrain');
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
@@ -248,6 +305,12 @@ export default function PlatformsPage() {
           </ExportButton>
         </div>
       </div>
+      {/* Outbrain Data Status Messages */}
+      {outbrainSuccess && (
+        <div className="mb-4 p-3 rounded bg-green-100 text-green-800 border border-green-300 text-sm">
+          <strong>Success:</strong> Showing <b>real Outbrain data</b> from the Outbrain API.
+        </div>
+      )}
 
       {/* Filters */}
       <Card>

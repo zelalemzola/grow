@@ -27,9 +27,6 @@ import {
   Eye
 } from 'lucide-react';
 import { 
-  getMockData 
-} from '@/lib/api';
-import { 
   calculateKPIs, 
   generateChartData,
   formatCurrency,
@@ -63,6 +60,8 @@ export default function OrdersPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     'orderId', 'date', 'sku', 'revenue', 'profit', 'quantity', 'country', 'paymentMethod'
   ]);
+  // Remove the comment about usingMock
+  // Remove usingReal and related logic
 
   // Enhanced columns with tooltips and sorting - only include properties that exist in Order interface
   const enhancedColumns = [
@@ -84,18 +83,39 @@ export default function OrdersPage() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const { orders: mockOrders, adSpend: mockAdSpend } = getMockData();
-        setAllOrders(mockOrders);
-        setAllAdSpend(mockAdSpend);
+        // Fetch Checkout Champ data from server-side API route
+        const from = filters.dateRange.from;
+        const to = filters.dateRange.to;
+        let ordersData = [];
+        try {
+          const response = await fetch(`/api/checkoutchamp?from=${from}&to=${to}`);
+          if (response.ok) {
+            ordersData = await response.json();
+            if (ordersData && ordersData.length > 0) {
+              setAllOrders(ordersData);
+              console.log('[Checkout Champ] Showing real data.');
+            } else {
+              setAllOrders([]);
+              console.error('[Checkout Champ] API failed or returned no data.');
+            }
+          } else {
+            setAllOrders([]);
+            console.error('[Checkout Champ] API failed or returned no data.');
+          }
+        } catch (e) {
+          setAllOrders([]);
+          console.error('[Checkout Champ] API failed or returned no data.');
+        }
       } catch (error) {
-        console.error('Error loading data:', error);
+        setAllOrders([]);
+        console.error('[Checkout Champ] API failed or returned no data.');
       } finally {
         setLoading(false);
       }
     };
-
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   // Apply filters to data
   const filteredOrders = filterData(allOrders, filters);
@@ -114,7 +134,7 @@ export default function OrdersPage() {
     };
   });
 
-  const kpis = calculateKPIs(filteredOrders, filteredAdSpend);
+  const kpis = calculateKPIs(filteredOrders, filteredAdSpend, [], []);
   const chartData = generateChartData(filteredOrders, filteredAdSpend, 30);
 
   // Filter and sort orders
@@ -171,6 +191,11 @@ export default function OrdersPage() {
   return (
     <div className="container-responsive space-y-4 sm:space-y-6">
       {/* Header Section */}
+      {allOrders.length === 0 && (
+        <div className="mb-4 p-3 rounded bg-red-100 text-red-800 border border-red-300 text-sm">
+          <strong>Error:</strong> Could not load order data from the Checkout Champ API. Please check your API keys or network connection.
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Order Details</h1>
@@ -210,7 +235,7 @@ export default function OrdersPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 w-full text-sm"
-            />
+          />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">

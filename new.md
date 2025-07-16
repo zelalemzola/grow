@@ -1,130 +1,120 @@
 
-# 🐞 Additional Debug Prompt: Accounting Dashboard (Charts, Data, Errors)
+# 📊 Accounting Dashboard API Data Mapping & Audit Prompt
 
-This markdown prompt outlines new issues related to data rendering failures, React console warnings, and chart initialization errors. Each section includes a breakdown of possible causes and specific actions to take.
+This document outlines the precise API endpoints and strategies for retrieving or calculating the metrics required in the project across four integrated platforms: Amplify (Outbrain), Taboola, AdUp, and CheckoutChamp.
 
----
-
-## 1. 📉 Dashboard & Reports Page – Revenue Trend Chart
-
-### Issue:
-Revenue trend chart is not displaying any data on both the **Dashboard** and **Reports** pages.
-
-### Investigation Checklist:
-- ✅ Is the chart’s data array empty or undefined?
-- ✅ Does the backend or mock data include a valid `revenue` field for the time series?
-- ✅ Is the chart expecting a different key name or structure?
-- ✅ Could a filter be hiding the data?
-
-🔧 **Action**:
-- Console.log the chart input
-- Add mock data with fields: `date`, `revenue`
-- Map correctly to the chart’s props
+Use this as a prompt for auditing the current codebase and aligning it with the proper data sources and their supported structures.
 
 ---
 
-## 2. 📊 Platforms Page – Data Distribution Chart
+## ✅ Metrics to Support Across All APIs
 
-### Issue:
-The **Data Distribution** chart does not render any values.
-
-### Questions:
-- Is each ad platform's data structured with the required metric? (e.g., `platform`, `spend`, `CTR`, etc.)
-- Are groupings or filters causing the chart to be empty?
-- Is the chart initialized before data is populated?
-
-🔧 **Fix**:
-- Validate expected data shape
-- Inject mock data if needed:
-```js
-[{ platform: "Meta", spend: 2500 }, { platform: "Taboola", spend: 1800 }]
-```
-- Ensure keys match chart configuration
-
----
-
-## 3. ⚠️ Orders Page – React Console Errors
-
-### Error A:
-```
-Each child in a list should have a unique "key" prop.
-Check the render method of `DataTable`
-```
-
-✅ **Cause**: A fragment `<>...</>` is being used without a `key`. Even though each `<tr>` has a `key`, the wrapping fragment does not.
-
-🔧 **Fix**:
-- Replace the fragment with `<React.Fragment key={index}>...</React.Fragment>`
+The system should retrieve or derive the following KPIs:
+- Total Sales
+- Total Profit
+- Profit Margin
+- ROAS
+- Cost per Customer
+- Total Marketing Spend
+- Total COGS
+- Total OPEX
+- Total Payment Processing Fees
+- Total Orders
+- Upsell Take Rate
+- AOV (Average Order Value)
+- Refund/Chargeback Numbers & Rate
+- Revenue Lost Due to Refunds & CBs
 
 ---
 
-### Error B:
-```
-ReferenceError: Cannot access 'chartData' before initialization
-```
+## 🔹 Amplify (Outbrain) API – [Docs](https://amplifyv01.docs.apiary.io/#)
 
-✅ **Cause**: You're trying to use `chartData` before it's declared with `const`, likely in the JSX.
-
-🔧 **Fix**:
-- Ensure `chartData` is declared **before** it’s used
-- Refactor the logic to ensure variables are scoped and initialized properly
-
----
-
-## 4. 📦 SKU Breakdown Page – Profit Distribution Chart
-
-### Issue:
-Chart fails to render profit breakdown by SKU.
-
-### Investigation:
-- Does each SKU include a `profit` attribute in mock data?
-- Are groupings or aggregations set up correctly?
-- Are you feeding the chart with complete records?
-
-🔧 **Fix**:
-```js
-[{ sku: "SKU-001", profit: 2000 }, { sku: "SKU-002", profit: 1200 }]
-```
+| Metric | Endpoint | Notes |
+|--------|----------|-------|
+| Total Sales | `/reports/marketers/{marketerId}/content` | Use `revenue` metric |
+| Total Profit | ✳️ Not direct | Compute: `Revenue - (COGS + OPEX + Fees + Refunds)` |
+| Profit Margin | ✳️ Not direct | `Profit / Sales` |
+| ROAS | `/reports/marketers/{marketerId}/content` | Use `revenue` and `spend` |
+| Cost per Customer | `/reports/marketers/{marketerId}/content` | `spend / conversions` |
+| Total Marketing Spend | `/reports/marketers/{marketerId}/content` | Use `spend` field |
+| Total COGS | ✳️ Not exposed | Use internal logic |
+| Total OPEX | ✳️ Not exposed | Use internal logic |
+| Total Payment Processing Fees | ✳️ Not exposed | Use internal/payments API |
+| Total Orders | `/reports/marketers/{marketerId}/content` | Use `conversions` |
+| Upsell Take Rate | ✳️ Not exposed | Use campaign structure/tags |
+| AOV | `/reports/marketers/{marketerId}/content` | Calculate: `Sales / Orders` |
+| Refunds & CBs | ✳️ Not available | Use accounting systems |
 
 ---
 
-## 5. 🧾 SKU Breakdown Page – Data Distribution Chart
+## 🔹 Taboola API – [Docs](https://developers.taboola.com/backstage-api/reference/welcome)
 
-### Issue:
-SKU-level chart not displaying values.
-
-🔧 **Checklist**:
-- Confirm metric is available: `units_sold`, `profit`, or `revenue`
-- Add a default fallback dataset to test rendering logic
-
----
-
-## 6. 🌍 Geographic Page – Revenue Distribution Chart
-
-### Issue:
-The **Geographic Distribution** chart isn’t displaying country-level data.
-
-✅ Checks:
-- Does the data include `region`/`country` and a numeric metric like `revenue`?
-- Are filters clearing the view?
-
-🔧 **Fix**:
-```js
-[{ country: "USA", revenue: 5000 }, { country: "Canada", revenue: 2100 }]
-```
+| Metric | Endpoint | Notes |
+|--------|----------|-------|
+| Total Sales | `/campaigns/performance` | Use `revenue` metric |
+| Total Profit | ✳️ Not direct | Compute from `revenue - spend - costs` |
+| Profit Margin | ✳️ Not direct | Derived |
+| ROAS | `/campaigns/performance` | Use `revenue / spent` |
+| Cost per Customer | `/campaigns/performance` | Use `spent / conversions` |
+| Total Marketing Spend | `/campaigns/performance` | Use `spent` |
+| Total COGS/OPEX | ✳️ Not provided | Use internal logic |
+| Payment Fees | ✳️ Not provided | Payment system needed |
+| Total Orders | `/campaigns/performance` | Use `conversions` |
+| Upsell Take Rate | ✳️ Not exposed | May need CRM |
+| AOV | Derived | `revenue / conversions` |
+| Refunds & CBs | ✳️ Not available | Use payment/accounting system |
 
 ---
 
-## ✅ Summary of Required Fixes
+## 🔹 AdUp API – [Docs](https://www.adup-tech.com/en/support/article/adup-api-basics/)
 
-- [ ] Validate and map data inputs for **Revenue Trend** charts
-- [ ] Patch `Data Distribution` charts on Platforms, SKUs, Geographic pages
-- [ ] Add missing `key` props to React fragments in lists
-- [ ] Fix `chartData` initialization error on Orders page
-- [ ] Audit mock data completeness for charts
-- [ ] Add console checks for every data structure feeding a chart/table
-- [ ] Improve fallback behavior when data is empty or missing
+| Metric | Endpoint | Notes |
+|--------|----------|-------|
+| Total Sales | `CAMPAIGN_PERFORMANCE_REPORT` | Use `revenue` |
+| Total Profit | ✳️ Not direct | Derived from other metrics |
+| Profit Margin | ✳️ Not direct | Calculate manually |
+| ROAS | `CAMPAIGN_PERFORMANCE_REPORT` | Use `revenue / spend` |
+| Cost per Customer | `CAMPAIGN_PERFORMANCE_REPORT` | Use `spend / conversions` |
+| Total Marketing Spend | `CAMPAIGN_PERFORMANCE_REPORT` | Aggregate `spend` |
+| COGS, OPEX, Fees | ✳️ Not available | Use financial systems |
+| Orders | `CAMPAIGN_PERFORMANCE_REPORT` | Use `conversions` |
+| AOV | Derived | `revenue / orders` |
+| Upsell & Refunds | ✳️ Not available | Tagging/CRM needed |
 
 ---
 
-With these targeted corrections, we can ensure the dashboard reflects real-world performance data across all dimensions.
+## 🔹 CheckoutChamp API – [Docs](https://apidocs.checkoutchamp.com/)
+
+| Metric | Endpoint | Notes |
+|--------|----------|-------|
+| Total Sales | `/order/query` | Sum `order_total` |
+| Total Profit | ✳️ Not direct | Derived from sales - costs |
+| Profit Margin | ✳️ Not direct | Profit / Sales |
+| ROAS | ✳️ Not available | Combine with ad platform spend |
+| Cost per Customer | ✳️ Not available | Combine ad spend with order data |
+| Total Orders | `/order/query` | Count orders |
+| AOV | Derived | `sales / orders` |
+| Refunds, CBs, Fees | ✳️ Not provided | Use Stripe/Checkout.com APIs |
+| Upsell Take Rate | ✳️ Not available | Custom tagging in metadata |
+
+---
+
+## 🧪 Prompt Objective
+
+Use this audit prompt to:
+
+1. Validate that all metric visualizations and tables pull from the correct API or calculate the metric accurately.
+2. Ensure all API integrations follow authentication standards (`OB-TOKEN-V1` for Amplify, OAuth2 for AdUp, etc.).
+3. Verify that charts rendering ROAS, sales, orders, etc., have correctly mapped fields per API.
+4. Where APIs do not expose data (COGS, Fees, OPEX, Refunds), fallback logic must be implemented using static fields.
+5. Each API client wrapper should map the above endpoints with proper pagination, filters (date, campaign), and headers.
+
+---
+
+## 📌 Final Note
+
+This project integrates multiple APIs with inconsistent financial data support. Your app must gracefully handle missing metrics by:
+
+- Tagging uncalculable KPIs with visual warnings
+- Using fallback values
+- Explaining metrics sourced via combination or inference

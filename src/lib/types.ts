@@ -180,8 +180,7 @@ export interface GeographicData {
 export interface APIConfig {
   outbrain: {
     baseUrl: string;
-    username: string;
-    password: string;
+    token: string;
   };
   taboola: {
     baseUrl: string;

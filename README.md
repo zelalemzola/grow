@@ -61,8 +61,7 @@ Create a `.env.local` file in the root directory:
 
 ```env
 # Outbrain Amplify
-OUTBRAIN_USERNAME=your_username
-OUTBRAIN_PASSWORD=your_password
+OUTBRAIN_TOKEN=your_token_here  # Generate from Outbrain dashboard, keep secret
 
 # Taboola Backstage
 TABOOLA_CLIENT_ID=your_client_id
