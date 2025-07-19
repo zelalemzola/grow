@@ -3,8 +3,10 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/dashboard/DataTable';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Info, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { Eye, Info, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 
 const fetchCampaigns = async (marketerId: string) => {
   const res = await fetch(`/api/outbrain/campaigns?marketerId=${marketerId}`);
@@ -38,8 +40,9 @@ export default function CampaignsList({ marketerId, onSelect, selectedCampaignId
     { key: 'enabled', label: 'Status', visible: true, sortable: true, tooltip: 'Active/Inactive' },
     { key: 'contentType', label: 'Type', visible: true, sortable: true },
     { key: 'objective', label: 'Objective', visible: true },
+    { key: 'targetingPlatform', label: 'Targeting Platform', visible: true, sortable: true },
+    { key: 'currency', label: 'Currency', visible: true, sortable: true },
     { key: 'cpc', label: 'CPC', visible: true },
-    { key: 'currency', label: 'Currency', visible: false },
     { key: 'creationTime', label: 'Created', visible: false },
     { key: 'lastModified', label: 'Modified', visible: false },
   ];
@@ -48,6 +51,10 @@ export default function CampaignsList({ marketerId, onSelect, selectedCampaignId
     ...row,
     enabled: row.enabled ? <Badge variant="default" className="bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle className="h-3 w-3" />Active</Badge> : <Badge variant="secondary" className="bg-red-100 text-red-800 flex items-center gap-1"><XCircle className="h-3 w-3" />Inactive</Badge>,
     contentType: row.contentType ? <Badge variant="outline" className="flex items-center gap-1"><Info className="h-3 w-3" />{row.contentType}</Badge> : '-',
+    targetingPlatform: row.targeting?.platform && Array.isArray(row.targeting.platform) && row.targeting.platform.length > 0 ? 
+      <Badge variant="outline" className="flex items-center gap-1"><TrendingUp className="h-3 w-3" />{row.targeting.platform.join(', ')}</Badge> : 
+      <Badge variant="outline" className="flex items-center gap-1"><TrendingUp className="h-3 w-3" />All Platforms</Badge>,
+    currency: row.currency ? <Badge variant="outline" className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{row.currency}</Badge> : '-',
     cpc: row.cpc ? `$${row.cpc}` : '-',
     name: <span className={selectedCampaignId === row.id ? 'font-bold text-primary' : ''}>{row.name}</span>,
   });
@@ -69,31 +76,39 @@ export default function CampaignsList({ marketerId, onSelect, selectedCampaignId
   return (
     <div>
       <div className="flex flex-wrap gap-2 mb-4">
-        <input
+        <Input
           type="text"
           placeholder="Search campaigns..."
           value={filters.search}
           onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-          className="border px-2 py-1 rounded text-sm"
+          className="w-48"
         />
-        <select
+        <Select
           value={filters.status}
-          onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-          className="border px-2 py-1 rounded text-sm"
+          onValueChange={value => setFilters(f => ({ ...f, status: value }))}
         >
-          <option value="all">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-        <select
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
           value={filters.type}
-          onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
-          className="border px-2 py-1 rounded text-sm"
+          onValueChange={value => setFilters(f => ({ ...f, type: value }))}
         >
-          <option value="all">All Types</option>
-          <option value="articles">Articles</option>
-          <option value="video">Video</option>
-        </select>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="articles">Articles</SelectItem>
+            <SelectItem value="video">Video</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <DataTable
         data={filtered.map(formatRow)}

@@ -28,24 +28,28 @@ export function PieChart({
 }: PieChartProps) {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      const isPlatformSpend = 'platform' in data;
+      const dataPoint = payload[0].payload;
+      const isPlatformSpend = 'platform' in dataPoint;
+      
+      // Calculate total for percentage
+      const total = data.reduce((sum: number, item: any) => sum + (isPlatformSpend ? item.spend : item.value), 0);
+      const percentage = (dataPoint.value / total) * 100;
       
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
           <p className="text-sm font-medium">
-            {isPlatformSpend ? data.platform : data.name}
+            {isPlatformSpend ? dataPoint.platform : dataPoint.name}
           </p>
           <p className="text-sm text-muted-foreground">
             {isPlatformSpend 
-              ? `Spend: ${formatCurrency(data.spend)}`
-              : `Value: ${formatCurrency(data.value)}`
+              ? `Spend: ${formatCurrency(dataPoint.spend)}`
+              : `Value: ${formatCurrency(dataPoint.value)}`
             }
           </p>
           <p className="text-sm text-muted-foreground">
             {isPlatformSpend 
-              ? `Percentage: ${formatPercentage(data.percentage)}`
-              : `Percentage: ${formatPercentage((data.value / data.reduce((sum: number, item: any) => sum + (isPlatformSpend ? item.spend : item.value), 0)) * 100)}`
+              ? `Percentage: ${formatPercentage(dataPoint.percentage)}`
+              : `Percentage: ${formatPercentage(percentage)}`
             }
           </p>
         </div>

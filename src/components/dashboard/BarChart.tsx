@@ -9,6 +9,7 @@ interface BarChartProps {
   dataKey: string;
   xAxisDataKey: string;
   colors?: string[];
+  yAxisFormatter?: (value: number) => string;
 }
 
 export function BarChart({ 
@@ -17,16 +18,17 @@ export function BarChart({
   description,
   dataKey,
   xAxisDataKey,
-  colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300']
+  colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300'],
+  yAxisFormatter = formatCurrency
 }: BarChartProps) {
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean, payload?: any[], label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
           <p className="text-sm font-medium">{`${xAxisDataKey}: ${label}`}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm text-muted-foreground">
-              {`${entry.name}: ${formatCurrency(entry.value)}`}
+              {`${entry.name}: ${yAxisFormatter(entry.value)}`}
             </p>
           ))}
         </div>
@@ -46,7 +48,7 @@ export function BarChart({
           />
           <YAxis 
             className="text-xs"
-            tickFormatter={(value) => formatCurrency(value)}
+            tickFormatter={yAxisFormatter}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend />

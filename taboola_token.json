@@ -1,0 +1,52 @@
+{
+	"info": {
+		"_postman_id": "6a5bc80c-d94a-421b-80d1-cf42300267d8",
+		"name": "TABOOLA",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "42794888"
+	},
+	"item": [
+		
+		{
+			"name": "token",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "client_id",
+							"value": "29789ce1ffce4420a3a4b7a02a08dca5",
+							"type": "text"
+						},
+						{
+							"key": "client_secret",
+							"value": "7cc5a5d3d81c49e38eccde69aad04492",
+							"type": "text"
+						},
+						{
+							"key": "grant_type",
+							"value": "client_credentials",
+							"type": "text"
+						}
+					]
+				},
+				"url": "https://backstage.taboola.com/backstage/oauth/token"
+			},
+			"response": [
+				{
+				    "access_token": "CXBRAAAAAAAAEUoBRQEAAAAAGAEgACkckc8gmAEAADooYThjNzdkOTg2ZWIxNzQyNTRkMTY1NzRkODNiNmVjNjg0ZjJkMTkxZkAC::c6fcb1::67b096",
+				    "token_type": "bearer",
+				    "expires_in": 43200
+				}
+			]
+		}
+	]
+}

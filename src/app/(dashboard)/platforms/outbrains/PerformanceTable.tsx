@@ -3,18 +3,25 @@ import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/dashboard/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Eye, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, Eye, Info, DollarSign, Target, Calendar } from 'lucide-react';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const alwaysShow = [
   { key: 'name', label: 'Campaign Name', tooltip: 'The name of the campaign.' },
   { key: 'id', label: 'Campaign ID', tooltip: 'Unique identifier for the campaign.' },
 ];
 
-export default function PerformanceTable({ marketerId, campaignId, budgetId }: { marketerId: string, campaignId?: string, budgetId?: string }) {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+export default function PerformanceTable({ marketerId, campaignId, budgetId, from, to }: { marketerId: string, campaignId?: string, budgetId?: string, from: Date, to: Date }) {
   const [search, setSearch] = useState('');
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
+  const [filters, setFilters] = useState({
+    hasConversions: 'all'
+  });
 
   const fetchPerformance = async (params: Record<string, string | undefined>) => {
     const url = new URL('/api/outbrain/performance', window.location.origin);
@@ -25,8 +32,14 @@ export default function PerformanceTable({ marketerId, campaignId, budgetId }: {
   };
 
   const { data, error, isLoading } = useQuery({
-    queryKey: ['outbrain', 'performance', marketerId, campaignId, budgetId, from, to],
-    queryFn: () => fetchPerformance({ marketerId, campaignId, budgetId, from, to }),
+    queryKey: ['outbrain', 'performance', marketerId, campaignId, budgetId, from?.toISOString().slice(0,10), to?.toISOString().slice(0,10)],
+    queryFn: () => fetchPerformance({
+      marketerId,
+      campaignId,
+      budgetId,
+      from: from ? from.toISOString().slice(0, 10) : undefined,
+      to: to ? to.toISOString().slice(0, 10) : undefined,
+    }),
     enabled: !!marketerId,
   });
 
@@ -46,11 +59,15 @@ export default function PerformanceTable({ marketerId, campaignId, budgetId }: {
       Object.keys(flat).forEach(k => keys.add(k));
       return flat;
     }).filter((row: any) => {
-      if (search && !Object.values(row).some(v => v?.toString().toLowerCase().includes(search.toLowerCase()))) return false;
+      // Has conversions filter
+      const conversions = Number(row.conversions || 0);
+      if (filters.hasConversions === 'yes' && conversions === 0) return false;
+      if (filters.hasConversions === 'no' && conversions > 0) return false;
+      
       return true;
     });
     return { rows, allKeys: Array.from(keys) };
-  }, [data, search]);
+  }, [data, filters]);
 
   // Build columns: always show a few, then all others found in data, but exclude raw 'budget'
   const columns = [
@@ -95,28 +112,22 @@ export default function PerformanceTable({ marketerId, campaignId, budgetId }: {
 
   return (
     <div className="mt-8">
-      <div className="flex flex-wrap gap-2 mb-4">
-        <input
-          type="date"
-          value={from}
-          onChange={e => setFrom(e.target.value)}
-          className="border px-2 py-1 rounded text-sm"
-          placeholder="From"
-        />
-        <input
-          type="date"
-          value={to}
-          onChange={e => setTo(e.target.value)}
-          className="border px-2 py-1 rounded text-sm"
-          placeholder="To"
-        />
-        <input
-          type="text"
-          placeholder="Search performance..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="border px-2 py-1 rounded text-sm"
-        />
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
+        {/* Date pickers are now controlled by parent, so just display the range */}
+        <span className="text-sm text-muted-foreground">Showing data from <b>{from ? from.toISOString().slice(0,10) : ''}</b> to <b>{to ? to.toISOString().slice(0,10) : ''}</b></span>
+        <Select
+          value={filters.hasConversions}
+          onValueChange={value => setFilters(f => ({ ...f, hasConversions: value }))}
+        >
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="All Conversions" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Conversions</SelectItem>
+            <SelectItem value="yes">Has Conversions</SelectItem>
+            <SelectItem value="no">No Conversions</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <DataTable
         data={rows.map(formatRow)}

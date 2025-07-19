@@ -1,0 +1,49 @@
+{
+	"info": {
+		"_postman_id": "5c39606d-5658-4df2-b8ab-11d73dd55f94",
+		"name": "Adup",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "42794888"
+	},
+	"item": [
+		{
+			"name": "Token",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "grant_type",
+							"value": "client_credentials",
+							"type": "text"
+						},
+						{
+							"key": "client_id",
+							"value": "RolxOVSfud4aZYo7pOoe",
+							"type": "text"
+						},
+						{
+							"key": "client_secret",
+							"value": "KBp2bT0if4fwjNlkioCOnrDcDfJswGZ3QDNqeKaaIGOQ8Coy",
+							"type": "text"
+						}
+					]
+				},
+				"url": "https://api.adup-tech.com/v202101/oauth2/token"
+			},
+			"response": [
+				{
+				    "expires_in": 1800,
+				    "refresh_token_expires_in": 86400,
+				    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrIjoibHl1RGpGREdpcVpKa1hGajBuR01pZVVWIiwiYyI6Ilg5ck5xeld3SU5lZGJnd2E2YlJRIiwiaWF0IjoxNzUyOTAzOTQwLCJleHAiOjE4MDAsInMiOiJhZHZlcnRpc2VycyBjYW1wYWlnbnMgY29udmVyc2lvbnM6dXBsb2FkIHByb2R1Y3RmZWVkcyByZXBvcnRzIHVzZXJzIn0.x3J3wdXa7KAuveLZkGoUFrb6ZZl_eDoBNSL8jYc2Hfg",
+				    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhIjoiZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnJJam9pYkhsMVJHcEdSRWRwY1ZwS2ExaEdhakJ1UjAxcFpWVldJaXdpWXlJNklsZzVjazV4ZWxkM1NVNWxaR0puZDJFMllsSlJJaXdpYVdGMElqb3hOelV5T1RBek9UUXdMQ0psZUhBaU9qRTRNREFzSW5NaU9pSmhaSFpsY25ScGMyVnljeUJqWVcxd1lXbG5ibk1nWTI5dWRtVnljMmx2Ym5NNmRYQnNiMkZrSUhCeWIyUjFZM1JtWldWa2N5QnlaWEJ2Y25SeklIVnpaWEp6SW4wLngzSjN3ZFhhN0tBdXZlTFprR29VRnJiNlpabF9lRG9CTlNMOGpZYzJIZmcifQ.JCim_E7DNn6QuLhDj7nN0m9_nm-2Tw54yoHMlZo85bU",
+				    "scope": "advertisers campaigns conversions:upload productfeeds reports users",
+				    "token_type": "Bearer"
+				}
+			]
+		}
+	
+	]
+}

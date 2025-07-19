@@ -3,8 +3,10 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/dashboard/DataTable';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, Info, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { DollarSign, Info, CheckCircle, XCircle, Clock, Calendar, Target, Users } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 
 const fetchBudgets = async (marketerId: string) => {
   const res = await fetch(`/api/outbrain/budgets?marketerId=${marketerId}`);
@@ -19,7 +21,14 @@ export default function BudgetsList({ marketerId, onDetails }: { marketerId: str
     enabled: !!marketerId,
   });
 
-  const [filters, setFilters] = useState({ search: '', type: 'all' });
+  const [filters, setFilters] = useState({ 
+    search: '', 
+    type: 'all', 
+    pacing: 'all', 
+    shared: 'all',
+    runForever: 'all',
+    currency: 'all'
+  });
   const budgets = useMemo(() => data?.budgets ?? [], [data]);
 
   // Filtering logic
@@ -27,6 +36,16 @@ export default function BudgetsList({ marketerId, onDetails }: { marketerId: str
     return budgets.filter((b: any) => {
       if (filters.search && !b.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
       if (filters.type !== 'all' && (b.type || '').toLowerCase() !== filters.type) return false;
+      if (filters.pacing !== 'all' && (b.pacing || '').toLowerCase() !== filters.pacing) return false;
+      if (filters.shared !== 'all') {
+        const isShared = b.shared ? 'yes' : 'no';
+        if (isShared !== filters.shared) return false;
+      }
+      if (filters.runForever !== 'all') {
+        const runsForever = b.runForever ? 'yes' : 'no';
+        if (runsForever !== filters.runForever) return false;
+      }
+      if (filters.currency !== 'all' && (b.currency || '').toLowerCase() !== filters.currency) return false;
       return true;
     });
   }, [budgets, filters]);
@@ -54,8 +73,10 @@ export default function BudgetsList({ marketerId, onDetails }: { marketerId: str
     // amountSpent: typeof row.amountSpent === 'number' ? `$${row.amountSpent}` : '-',
     // amountRemaining: typeof row.amountRemaining === 'number' ? `$${row.amountRemaining}` : '-',
     type: row.type ? <Badge variant="outline" className="flex items-center gap-1"><Info className="h-3 w-3" />{row.type}</Badge> : '-',
-    runForever: row.runForever ? 'Yes' : 'No',
-    shared: row.shared ? 'Yes' : 'No',
+    pacing: row.pacing ? <Badge variant="outline" className="flex items-center gap-1"><Target className="h-3 w-3" />{row.pacing}</Badge> : '-',
+    currency: row.currency ? <Badge variant="outline" className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{row.currency}</Badge> : '-',
+    runForever: row.runForever ? <Badge variant="default" className="bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle className="h-3 w-3" />Yes</Badge> : <Badge variant="secondary" className="bg-gray-100 text-gray-800 flex items-center gap-1"><XCircle className="h-3 w-3" />No</Badge>,
+    shared: row.shared ? <Badge variant="default" className="bg-blue-100 text-blue-800 flex items-center gap-1"><Users className="h-3 w-3" />Yes</Badge> : <Badge variant="secondary" className="bg-gray-100 text-gray-800 flex items-center gap-1"><XCircle className="h-3 w-3" />No</Badge>,
     name: <span>{row.name}</span>,
   });
 
@@ -76,22 +97,79 @@ export default function BudgetsList({ marketerId, onDetails }: { marketerId: str
   return (
     <div>
       <div className="flex flex-wrap gap-2 mb-4">
-        <input
+        <Input
           type="text"
           placeholder="Search budgets..."
           value={filters.search}
           onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-          className="border px-2 py-1 rounded text-sm"
+          className="w-48"
         />
-        <select
+        <Select
           value={filters.type}
-          onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
-          className="border px-2 py-1 rounded text-sm"
+          onValueChange={value => setFilters(f => ({ ...f, type: value }))}
         >
-          <option value="all">All Types</option>
-          <option value="daily">Daily</option>
-          <option value="lifetime">Lifetime</option>
-        </select>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="daily">Daily</SelectItem>
+            <SelectItem value="lifetime">Lifetime</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={filters.pacing}
+          onValueChange={value => setFilters(f => ({ ...f, pacing: value }))}
+        >
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="All Pacing" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Pacing</SelectItem>
+            <SelectItem value="spend_asap">Spend ASAP</SelectItem>
+            <SelectItem value="standard">Standard</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={filters.shared}
+          onValueChange={value => setFilters(f => ({ ...f, shared: value }))}
+        >
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="All Shared" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Shared</SelectItem>
+            <SelectItem value="yes">Shared</SelectItem>
+            <SelectItem value="no">Not Shared</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={filters.runForever}
+          onValueChange={value => setFilters(f => ({ ...f, runForever: value }))}
+        >
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="All Run Forever" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Run Forever</SelectItem>
+            <SelectItem value="yes">Run Forever</SelectItem>
+            <SelectItem value="no">Limited Time</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={filters.currency}
+          onValueChange={value => setFilters(f => ({ ...f, currency: value }))}
+        >
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="All Currencies" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Currencies</SelectItem>
+            <SelectItem value="usd">USD</SelectItem>
+            <SelectItem value="eur">EUR</SelectItem>
+            <SelectItem value="gbp">GBP</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <DataTable
         data={filtered.map(formatRow)}

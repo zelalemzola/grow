@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await fetchTaboolaData(fromDate, toDate);
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate' } });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch Taboola data' }, { status: 500 });
   }

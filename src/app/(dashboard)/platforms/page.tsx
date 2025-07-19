@@ -1,639 +1,418 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+"use client";
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-
-import { FilterPanel } from '@/components/dashboard/FilterPanel';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { CalendarIcon, TrendingUp, TrendingDown, DollarSign, BarChart3, MousePointerClick, Eye, Target, Activity, ArrowRight, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { AreaChart } from '@/components/dashboard/AreaChart';
 import { BarChart } from '@/components/dashboard/BarChart';
 import { PieChart } from '@/components/dashboard/PieChart';
-import { AreaChart } from '@/components/dashboard/AreaChart';
-import { ExportButton } from '@/components/dashboard/ExportButton';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  Search,
-  Target,
-  Activity,
-  BarChart3,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  MousePointer,
-  Zap,
-  Globe,
-  Smartphone,
-  Monitor,
-  Tablet,
-  Users
-} from 'lucide-react';
-import { 
-  calculatePlatformSpend,
-  formatCurrency,
-  formatPercentage,
-  formatNumber,
-  filterAdSpendData
-} from '@/lib/calculations';
-import { 
-  downloadCSV,
-  exportAdSpendToCSV
-} from '@/lib/export';
-import { DashboardFilters, AdSpendEntry } from '@/lib/types';
+import { formatCurrency, formatNumber, formatPercentage } from '@/lib/calculations';
 
-interface PlatformMetrics {
-  platform: string;
-  spend: number;
-  impressions: number;
-  clicks: number;
-  ctr: number;
-  roas: number;
-  conversions: number;
-  cpa: number;
-  revenue: number;
-}
-
-interface PlatformFilter {
-  platforms: string[];
-  campaigns: string[];
-  countries: string[];
-  devices: string[];
-  adTypes: string[];
-  dateRange: {
-    from: string;
-    to: string;
-  };
-}
-
-// Add a utility to get marketerId for Outbrain (from env or config)
-const OUTBRAIN_MARKETER_ID = process.env.NEXT_PUBLIC_OUTBRAIN_MARKETER_ID || '';
-
-export default function PlatformsPage() {
-  const [allAdSpend, setAllAdSpend] = useState<AdSpendEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['outbrain', 'taboola', 'adup']);
-  const [comparisonMode, setComparisonMode] = useState(false);
-  const [filters, setFilters] = useState<PlatformFilter>({
-    platforms: ['outbrain', 'taboola', 'adup'],
-    campaigns: [],
-    countries: [],
-    devices: [],
-    adTypes: [],
-    dateRange: {
-      from: '2025-01-01',
-      to: '2025-01-31',
+// Platform data fetching hooks
+const usePlatformsSummary = (fromDate: string, toDate: string) => {
+  return useQuery({
+    queryKey: ['platforms', 'summary', fromDate, toDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/platforms/summary?from=${fromDate}&to=${toDate}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch platforms summary');
+      }
+      const data = await res.json();
+      return data;
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
+};
 
-  const [chartType, setChartType] = useState<'bar' | 'pie' | 'area'>('bar');
-  const [chartMetric, setChartMetric] = useState<'spend' | 'impressions' | 'clicks' | 'ctr' | 'roas' | 'conversions'>('spend');
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      let allAdSpend: any[] = [];
-      let failedPlatforms: string[] = [];
-      let succeededPlatforms: string[] = [];
-      const fromDate = filters.dateRange.from;
-      const toDate = filters.dateRange.to;
-      // Fetch Taboola
-      let taboolaData: any[] = [];
-      try {
-        const response = await fetch(`/api/taboola?fromDate=${fromDate}&toDate=${toDate}`);
-        if (response.ok) {
-          taboolaData = await response.json();
-          if (taboolaData && taboolaData.length > 0) succeededPlatforms.push('Taboola');
-          else failedPlatforms.push('Taboola');
-        } else {
-          failedPlatforms.push('Taboola');
-        }
-      } catch (e) {
-        failedPlatforms.push('Taboola');
-      }
-      // Fetch AdUp
-      let adupData: any[] = [];
-      try {
-        const response = await fetch(`/api/adup?fromDate=${fromDate}&toDate=${toDate}`);
-        if (response.ok) {
-          adupData = await response.json();
-          if (adupData && adupData.length > 0) succeededPlatforms.push('AdUp');
-          else failedPlatforms.push('AdUp');
-        } else {
-          failedPlatforms.push('AdUp');
-        }
-      } catch (e) {
-        failedPlatforms.push('AdUp');
-      }
-      // Fetch Outbrain
-      let outbrainData: any[] = [];
-      try {
-        if (OUTBRAIN_MARKETER_ID) {
-          const response = await fetch(`/api/outbrain?marketerId=${OUTBRAIN_MARKETER_ID}&fromDate=${fromDate}&toDate=${toDate}`);
-          if (response.ok) {
-            outbrainData = await response.json();
-            if (outbrainData && outbrainData.length > 0) succeededPlatforms.push('Outbrain');
-            else failedPlatforms.push('Outbrain');
-          } else {
-            failedPlatforms.push('Outbrain');
-          }
-        } else {
-          failedPlatforms.push('Outbrain');
-        }
-      } catch (e) {
-        failedPlatforms.push('Outbrain');
-      }
-      // Remove the comment about mock data
-      let mergedAdSpend = [
-        ...(taboolaData || []),
-        ...(adupData || []),
-        ...(outbrainData || [])
-      ];
-      setAllAdSpend(mergedAdSpend);
-      setLoading(false);
-      // Log results
-      succeededPlatforms.forEach(p => console.log(`[${p}] Showing real data.`));
-      failedPlatforms.forEach(p => console.error(`[${p}] API failed or returned no data.`));
-    };
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.dateRange]);
-
-  // Filter data based on selected filters
-  const filteredData = allAdSpend.filter(entry => {
-    if (filters.platforms.length > 0 && !filters.platforms.includes(entry.platform)) return false;
-    if (filters.campaigns.length > 0 && !filters.campaigns.includes(entry.campaign || entry.campaignId)) return false;
-    if (filters.countries.length > 0 && !filters.countries.includes(entry.country || '')) return false;
-    if (filters.devices.length > 0 && !filters.devices.includes(entry.device || '')) return false;
-    if (filters.adTypes.length > 0 && !filters.adTypes.includes(entry.adType || '')) return false;
-    
-    const entryDate = new Date(entry.date);
-    const fromDate = new Date(filters.dateRange.from);
-    const toDate = new Date(filters.dateRange.to);
-    
-    return entryDate >= fromDate && entryDate <= toDate;
-  });
-
-  // Calculate platform metrics
-  const calculatePlatformMetrics = (): PlatformMetrics[] => {
-    const platformData = filteredData.reduce((acc, entry) => {
-      if (!acc[entry.platform]) {
-        acc[entry.platform] = {
-          platform: entry.platform,
-          spend: 0,
-          impressions: 0,
-          clicks: 0,
-          revenue: 0,
-          conversions: 0,
-          ctr: 0,
-          roas: 0,
-          cpa: 0
-        };
-      }
-      
-      acc[entry.platform].spend += entry.spend;
-      acc[entry.platform].impressions += entry.impressions;
-      acc[entry.platform].clicks += entry.clicks;
-      acc[entry.platform].revenue += entry.revenue || 0;
-      acc[entry.platform].conversions += entry.conversions || 0;
-      
-      return acc;
-    }, {} as Record<string, PlatformMetrics>);
-
-    return Object.values(platformData).map((data) => ({
-      ...data,
-      ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
-      roas: data.spend > 0 ? data.revenue / data.spend : 0,
-      cpa: data.conversions > 0 ? data.spend / data.conversions : 0
-    }));
+// Platform card component
+const PlatformCard = ({ 
+  platform, 
+  data, 
+  isLoading, 
+  error 
+}: { 
+  platform: string; 
+  data: any; 
+  isLoading: boolean; 
+  error: any; 
+}) => {
+  const platformConfig = {
+    outbrain: { name: 'Outbrain', color: 'bg-blue-500', icon: '🎯' },
+    taboola: { name: 'Taboola', color: 'bg-purple-500', icon: '📊' },
+    adup: { name: 'AdUp', color: 'bg-green-500', icon: '🚀' }
   };
 
-  const platformMetrics = calculatePlatformMetrics();
-
-  // Get unique values for filters
-  const uniquePlatforms = [...new Set(allAdSpend.map(entry => entry.platform))];
-  const uniqueCampaigns = [...new Set(allAdSpend.map(entry => entry.campaign || entry.campaignId))];
-  const uniqueCountries = [...new Set(allAdSpend.map(entry => entry.country || '').filter(Boolean))];
-  const uniqueDevices = [...new Set(allAdSpend.map(entry => entry.device || '').filter(Boolean))];
-  const uniqueAdTypes = [...new Set(allAdSpend.map(entry => entry.adType || '').filter(Boolean))];
-
-  const getChartData = () => {
-    const data = platformMetrics.filter(metric => 
-      selectedPlatforms.includes(metric.platform)
-    );
-
-    console.log('Platform metrics:', platformMetrics); // Debug log
-    console.log('Selected platforms:', selectedPlatforms); // Debug log
-    console.log('Filtered data:', data); // Debug log
-
-    switch (chartMetric) {
-      case 'spend':
-        return data.map(d => ({ name: d.platform, value: d.spend }));
-      case 'impressions':
-        return data.map(d => ({ name: d.platform, value: d.impressions }));
-      case 'clicks':
-        return data.map(d => ({ name: d.platform, value: d.clicks }));
-      case 'ctr':
-        return data.map(d => ({ name: d.platform, value: d.ctr }));
-      case 'roas':
-        return data.map(d => ({ name: d.platform, value: d.roas }));
-      case 'conversions':
-        return data.map(d => ({ name: d.platform, value: d.conversions }));
-      default:
-        return data.map(d => ({ name: d.platform, value: d.spend }));
-    }
-  };
-
-  const handleExport = () => {
-    const csvData = [
-      ['Platform', 'Spend', 'Impressions', 'Clicks', 'CTR', 'ROAS', 'Conversions', 'CPA', 'Revenue'],
-      ...platformMetrics.map(m => [
-        m.platform,
-        m.spend.toString(),
-        m.impressions.toString(),
-        m.clicks.toString(),
-        m.ctr.toFixed(2),
-        m.roas.toFixed(2),
-        m.conversions.toString(),
-        m.cpa.toFixed(2),
-        m.revenue.toString()
-      ])
-    ];
-    
-    const csv = csvData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `platform_analytics_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Determine Outbrain data status
-  const outbrainSuccess = allAdSpend.some(entry => entry.platform === 'outbrain');
-
-  if (loading) {
+  const config = platformConfig[platform as keyof typeof platformConfig];
+  
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 sm:h-32 sm:w-32 border-b-2 border-primary"></div>
-          <p className="mt-4 text-sm sm:text-base text-muted-foreground">Loading platform data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container-responsive space-y-4 sm:space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Platform Analytics</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Deep breakdowns and comparisons across advertising platforms
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <ExportButton onClick={handleExport} icon="file" className="w-full sm:w-auto">
-            Export Data
-          </ExportButton>
-        </div>
-      </div>
-      {/* Outbrain Data Status Messages */}
-      {outbrainSuccess && (
-        <div className="mb-4 p-3 rounded bg-green-100 text-green-800 border border-green-300 text-sm">
-          <strong>Success:</strong> Showing <b>real Outbrain data</b> from the Outbrain API.
-        </div>
-      )}
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm sm:text-base">Filters & Controls</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Platform Selection */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Platforms</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              {uniquePlatforms.map((platform: string) => (
-                <div key={platform} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={platform}
-                    checked={selectedPlatforms.includes(platform)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedPlatforms([...selectedPlatforms, platform]);
-                      } else {
-                        setSelectedPlatforms(selectedPlatforms.filter(p => p !== platform));
-                      }
-                    }}
-                  />
-                  <Label htmlFor={platform} className="text-sm">{platform}</Label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Date Range */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">From Date</Label>
-              <Input
-                type="date"
-                value={filters.dateRange.from}
-                onChange={(e) => setFilters({
-                  ...filters,
-                  dateRange: { ...filters.dateRange, from: e.target.value }
-                })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">To Date</Label>
-              <Input
-                type="date"
-                value={filters.dateRange.to}
-                onChange={(e) => setFilters({
-                  ...filters,
-                  dateRange: { ...filters.dateRange, to: e.target.value }
-                })}
-              />
-            </div>
-          </div>
-
-          {/* Additional Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Campaigns</Label>
-              <Select
-                value={filters.campaigns[0] || ''}
-                onValueChange={(value: string) => setFilters({
-                  ...filters,
-                  campaigns: value ? [value] : []
-                })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All campaigns" />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueCampaigns.length > 0 ? (
-                    uniqueCampaigns.map((campaign: string) => (
-                      <SelectItem key={campaign} value={campaign}>{campaign}</SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-campaigns" disabled>No campaigns available</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Countries</Label>
-              <Select
-                value={filters.countries[0] || ''}
-                onValueChange={(value: string) => setFilters({
-                  ...filters,
-                  countries: value ? [value] : []
-                })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All countries" />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueCountries.length > 0 ? (
-                    uniqueCountries.map((country: string) => (
-                      <SelectItem key={country} value={country}>{country}</SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-countries" disabled>No countries available</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Devices</Label>
-              <Select
-                value={filters.devices[0] || ''}
-                onValueChange={(value: string) => setFilters({
-                  ...filters,
-                  devices: value ? [value] : []
-                })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All devices" />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueDevices.length > 0 ? (
-                    uniqueDevices.map((device: string) => (
-                      <SelectItem key={device} value={device}>{device}</SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-devices" disabled>No devices available</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Ad Types</Label>
-              <Select
-                value={filters.adTypes[0] || ''}
-                onValueChange={(value: string) => setFilters({
-                  ...filters,
-                  adTypes: value ? [value] : []
-                })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All ad types" />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueAdTypes.length > 0 ? (
-                    uniqueAdTypes.map((adType: string) => (
-                      <SelectItem key={adType} value={adType}>{adType}</SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-adtypes" disabled>No ad types available</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Platform Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {platformMetrics.filter(metric => selectedPlatforms.includes(metric.platform)).map((metric, index) => (
-          <Card key={index} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">{metric.platform}</CardTitle>
-                <Badge variant="outline" className="text-xs">
-                  {metric.conversions} conv
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Spend</p>
-                  <p className="font-semibold">{formatCurrency(metric.spend)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Revenue</p>
-                  <p className="font-semibold">{formatCurrency(metric.revenue)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">ROAS</p>
-                  <p className="font-semibold">{metric.roas.toFixed(2)}x</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">CTR</p>
-                  <p className="font-semibold">{metric.ctr.toFixed(2)}%</p>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {formatNumber(metric.impressions)} impressions • {formatNumber(metric.clicks)} clicks
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div className="space-y-1">
-                <CardTitle className="text-sm sm:text-base font-semibold">Platform Performance</CardTitle>
-                <p className="text-xs text-muted-foreground">Comparison across platforms</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <Select value={chartMetric} onValueChange={(value: string) => setChartMetric(value as 'spend' | 'impressions' | 'clicks' | 'ctr' | 'roas' | 'conversions')}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="spend">Spend</SelectItem>
-                    <SelectItem value="impressions">Impressions</SelectItem>
-                    <SelectItem value="clicks">Clicks</SelectItem>
-                    <SelectItem value="ctr">CTR</SelectItem>
-                    <SelectItem value="roas">ROAS</SelectItem>
-                    <SelectItem value="conversions">Conversions</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={chartType} onValueChange={(value: string) => setChartType(value as 'bar' | 'pie' | 'area')}>
-                  <SelectTrigger className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bar">Bar</SelectItem>
-                    <SelectItem value="pie">Pie</SelectItem>
-                    <SelectItem value="area">Area</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const chartData = getChartData();
-              console.log('Platforms chart data:', chartData); // Debug log
-              
-              switch (chartType) {
-                case 'bar':
-                  return <BarChart data={chartData} dataKey="value" xAxisDataKey="name" />;
-                case 'pie':
-                  return <PieChart data={chartData} />;
-                case 'area':
-                  return <AreaChart data={chartData} dataKey="value" xAxisDataKey="name" />;
-                default:
-                  return <BarChart data={chartData} dataKey="value" xAxisDataKey="name" />;
-              }
-            })()}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div className="space-y-1">
-                <CardTitle className="text-sm sm:text-base font-semibold">Spend Distribution</CardTitle>
-                <p className="text-xs text-muted-foreground">Platform spend allocation</p>
-              </div>
-              <Badge variant="outline" className="text-xs w-fit">
-                {platformMetrics.length} platforms
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const pieData = platformMetrics.map(m => ({ name: m.platform, value: m.spend }));
-              console.log('Platforms spend distribution data:', pieData); // Debug log
-              return (
-                <PieChart data={pieData} />
-              );
-            })()}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detailed Data Table */}
-      <Card>
+      <Card className="h-full">
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="space-y-1">
-              <CardTitle className="text-sm sm:text-base font-semibold">Platform Metrics</CardTitle>
-              <p className="text-xs text-muted-foreground">Detailed platform performance data</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="text-2xl">{config.icon}</div>
+              <CardTitle className="text-lg">{config.name}</CardTitle>
             </div>
-            <ExportButton onClick={handleExport} icon="file" size="sm" className="w-full sm:w-auto">
-              Export
-            </ExportButton>
+            <Badge variant="secondary">Loading...</Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2">Platform</th>
-                  <th className="text-left p-2">Spend</th>
-                  <th className="text-left p-2">Impressions</th>
-                  <th className="text-left p-2">Clicks</th>
-                  <th className="text-left p-2">CTR</th>
-                  <th className="text-left p-2">ROAS</th>
-                  <th className="text-left p-2">Conversions</th>
-                  <th className="text-left p-2">CPA</th>
-                  <th className="text-left p-2">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {platformMetrics.filter(metric => selectedPlatforms.includes(metric.platform)).map((metric, index) => (
-                  <tr key={index} className="border-b hover:bg-muted/50">
-                    <td className="p-2 font-medium">{metric.platform}</td>
-                    <td className="p-2">{formatCurrency(metric.spend)}</td>
-                    <td className="p-2">{formatNumber(metric.impressions)}</td>
-                    <td className="p-2">{formatNumber(metric.clicks)}</td>
-                    <td className="p-2">{metric.ctr.toFixed(2)}%</td>
-                    <td className="p-2">{metric.roas.toFixed(2)}x</td>
-                    <td className="p-2">{formatNumber(metric.conversions)}</td>
-                    <td className="p-2">{formatCurrency(metric.cpa)}</td>
-                    <td className="p-2">{formatCurrency(metric.revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+            <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="h-full border-red-200">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="text-2xl">{config.icon}</div>
+              <CardTitle className="text-lg">{config.name}</CardTitle>
+            </div>
+            <Badge variant="destructive">Error</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-2 text-red-600">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">Failed to load data</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'paused': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'error': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  return (
+    <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer group">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="text-2xl">{config.icon}</div>
+            <CardTitle className="text-lg">{config.name}</CardTitle>
+          </div>
+          <Badge className={getStatusColor(data.status)}>
+            {data.status === 'active' ? 'Active' : data.status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Spend</p>
+            <p className="text-2xl font-bold">{formatCurrency(data.spend)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Revenue</p>
+            <p className="text-2xl font-bold">{formatCurrency(data.revenue)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">ROAS</p>
+            <p className="text-xl font-semibold">{data.roas.toFixed(2)}x</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Campaigns</p>
+            <p className="text-xl font-semibold">{data.campaigns}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            <div className="flex items-center space-x-1">
+              <MousePointerClick className="h-3 w-3" />
+              <span>{formatNumber(data.clicks)}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Eye className="h-3 w-3" />
+              <span>{formatNumber(data.impressions)}</span>
+            </div>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Comparison charts data
+const prepareChartData = (platformsData: any) => {
+  if (!platformsData) return { spendData: [], roasData: [], campaignData: [] };
+
+  const spendData = Object.entries(platformsData).map(([platform, data]: [string, any]) => ({
+    platform: platform.charAt(0).toUpperCase() + platform.slice(1),
+    spend: data.spend,
+    revenue: data.revenue,
+    roas: data.roas,
+    campaigns: data.campaigns
+  }));
+
+  const roasData = spendData.map(item => ({
+    platform: item.platform,
+    roas: item.roas
+  }));
+
+  const campaignData = spendData.map(item => ({
+    name: item.platform,
+    value: item.campaigns
+  }));
+
+  return { spendData, roasData, campaignData };
+};
+
+export default function PlatformsPage() {
+  const [dateRange, setDateRange] = useState<{
+    from: Date;
+    to: Date;
+  }>({
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+    to: new Date()
+  });
+
+  const fromDate = format(dateRange.from, 'yyyy-MM-dd');
+  const toDate = format(dateRange.to, 'yyyy-MM-dd');
+
+  const { data: platformsData, isLoading, error } = usePlatformsSummary(fromDate, toDate);
+  const chartData = useMemo(() => prepareChartData(platformsData?.platforms), [platformsData?.platforms]);
+
+  const totalSpend = platformsData?.overall?.spend || 0;
+  const totalRevenue = platformsData?.overall?.revenue || 0;
+  const overallROAS = platformsData?.overall?.roas || 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Platforms Overview</h1>
+          <p className="text-muted-foreground">
+            Compare performance across all advertising platforms
+          </p>
+        </div>
+        
+        {/* Date Range Picker */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateRange.from ? (
+                dateRange.to ? (
+                  <>
+                    {format(dateRange.from, "LLL dd, y")} -{" "}
+                    {format(dateRange.to, "LLL dd, y")}
+                  </>
+                ) : (
+                  format(dateRange.from, "LLL dd, y")
+                )
+              ) : (
+                <span>Pick a date range</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              initialFocus
+              mode="range"
+              defaultMonth={dateRange.from}
+              selected={dateRange}
+              onSelect={(range) => {
+                if (range?.from && range?.to) {
+                  setDateRange({ from: range.from, to: range.to });
+                }
+              }}
+              numberOfMonths={2}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Overall KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Spend</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(totalSpend)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Overall ROAS</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{overallROAS.toFixed(2)}x</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Platform Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <PlatformCard 
+          platform="outbrain" 
+          data={platformsData?.outbrain} 
+          isLoading={isLoading} 
+          error={error} 
+        />
+        <PlatformCard 
+          platform="taboola" 
+          data={platformsData?.taboola} 
+          isLoading={isLoading} 
+          error={error} 
+        />
+        <PlatformCard 
+          platform="adup" 
+          data={platformsData?.adup} 
+          isLoading={isLoading} 
+          error={error} 
+        />
+      </div>
+
+      {/* Comparison Charts */}
+      <Tabs defaultValue="spend" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="spend">Spend Comparison</TabsTrigger>
+          <TabsTrigger value="roas">ROAS Comparison</TabsTrigger>
+          <TabsTrigger value="campaigns">Campaign Distribution</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="spend" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Spend by Platform</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {chartData.spendData.length > 0 ? (
+                <BarChart
+                  data={chartData.spendData}
+                  dataKey="spend"
+                  xAxisDataKey="platform"
+                  yAxisFormatter={(value: number) => formatCurrency(value)}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  No data available
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="roas" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>ROAS by Platform</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {chartData.roasData.length > 0 ? (
+                <BarChart
+                  data={chartData.roasData}
+                  dataKey="roas"
+                  xAxisDataKey="platform"
+                  yAxisFormatter={(value: number) => `${value.toFixed(2)}x`}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  No data available
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="campaigns" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Campaign Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {chartData.campaignData.length > 0 ? (
+                <PieChart
+                  data={chartData.campaignData}
+                  dataKey="value"
+                  nameKey="name"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  No data available
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button variant="outline" className="h-auto p-4 flex flex-col items-start space-y-2" asChild>
+              <a href="/platforms/outbrains">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🎯</span>
+                  <span className="font-semibold">Outbrain Dashboard</span>
+                </div>
+                <span className="text-sm text-muted-foreground">View detailed Outbrain analytics</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto p-4 flex flex-col items-start space-y-2" asChild>
+              <a href="/platforms/taboola">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">📊</span>
+                  <span className="font-semibold">Taboola Dashboard</span>
+                </div>
+                <span className="text-sm text-muted-foreground">View detailed Taboola analytics</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto p-4 flex flex-col items-start space-y-2" asChild>
+              <a href="/platforms/adup">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🚀</span>
+                  <span className="font-semibold">AdUp Dashboard</span>
+                </div>
+                <span className="text-sm text-muted-foreground">View detailed AdUp analytics</span>
+              </a>
+            </Button>
           </div>
         </CardContent>
       </Card>
     </div>
   );
-} 
+}

@@ -16,25 +16,25 @@ export interface Order {
 }
 
 export interface AdSpendEntry {
-  platform: 'outbrain' | 'taboola' | 'adup';
-  campaignId: string;
+  platform: string;
+  campaignId?: string;
   campaignName?: string;
-  date: string;
   spend: number;
-  clicks: number;
-  impressions: number;
-  cpc?: number;
-  cpm?: number;
+  clicks?: number;
+  impressions?: number;
+  conversions?: number;
   roas?: number;
-  ctr?: number;
-  currency: string;
+  marketerId?: string;
+  marketerName?: string;
+  advertiserId?: string;
+  advertiserName?: string;
+  date?: string;
   // Additional properties for platform analytics
   campaign?: string;
   country?: string;
   device?: string;
   adType?: string;
   revenue?: number;
-  conversions?: number;
 }
 
 export interface SKUCost {

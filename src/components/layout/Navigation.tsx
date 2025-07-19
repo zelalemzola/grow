@@ -52,46 +52,34 @@ const navItems = [
     group: 'main'
   },
   {
-    href: '/reports',
-    label: 'Historical Reports',
-    icon: History,
-    group: 'reports'
-  },
-  {
-    href: '/ad-spend',
-    label: 'Ad Spend',
-    icon: DollarSign,
-    group: 'reports'
-  },
-  {
     href: '/platforms',
-    label: 'Platform Analytics',
+    label: 'Platform Comparison',
     icon: Target,
-    group: 'reports'
-  },
-  // {
-  //   href: '/calculator',
-  //   label: 'Calculator',
-  //   icon: Calculator,
-  //   group: 'analysis'
-  // },
-  {
-    href: '/sku-breakdown',
-    label: 'SKU Analysis',
-    icon: Package,
-    group: 'analysis'
+    group: 'main'
   },
   {
-    href: '/geographic',
-    label: 'Geographic Insights',
+    href: '/platforms/outbrains',
+    label: 'Outbrain Analytics',
     icon: Globe,
-    group: 'analysis'
+    group: 'platforms'
   },
   {
-    href: '/orders',
-    label: 'Order Details',
-    icon: FileText,
-    group: 'reports'
+    href: '/platforms/taboola',
+    label: 'Taboola Analytics',
+    icon: History,
+    group: 'platforms'
+  },
+  {
+    href: '/platforms/adup',
+    label: 'AdUp Analytics',
+    icon: Package,
+    group: 'platforms'
+  },
+  {
+    href: '/platforms/checkoutchamp',
+    label: 'Checkout Champ Analytics',
+    icon: DollarSign,
+    group: 'platforms'
   },
 ];
 
@@ -111,8 +99,7 @@ export function Navigation({ children }: { children: React.ReactNode }) {
   const getGroupLabel = (group: string) => {
     switch (group) {
       case 'main': return 'Main';
-      case 'reports': return 'Reports';
-      case 'analysis': return 'Analysis';
+      case 'platforms': return 'Platforms';
       default: return group;
     }
   };

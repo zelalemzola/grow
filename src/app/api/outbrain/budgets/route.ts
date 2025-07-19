@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error }, { status: res.status });
     }
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate' } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch budgets' }, { status: 500 });
   }

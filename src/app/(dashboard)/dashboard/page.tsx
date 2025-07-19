@@ -1,536 +1,330 @@
-'use client';
+"use client";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { KPICard } from "@/components/dashboard/KPICard";
+import { BarChart} from "@/components/dashboard/BarChart";
+import { ExportButton } from "@/components/dashboard/ExportButton";
+import { DataTable } from "@/components/dashboard/DataTable";
+import { formatCurrency, formatPercentage, formatNumber } from "@/lib/calculations";
+import { DashboardFilters, Order, AdSpendEntry } from "@/lib/types";
+import { addYears, format } from "date-fns";
+import { Globe, History, Package, DollarSign, Target } from "lucide-react";
+import { PieChart } from "@/components/dashboard/PieChart";
+import { AreaChart } from "@/components/dashboard/AreaChart";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-
-import { FilterPanel } from '@/components/dashboard/FilterPanel';
-import { KPICard } from '@/components/dashboard/KPICard';
-import { RevenueChart } from '@/components/dashboard/RevenueChart';
-import { PieChart } from '@/components/dashboard/PieChart';
-import { BarChart } from '@/components/dashboard/BarChart';
-import { AreaChart } from '@/components/dashboard/AreaChart';
-import { ExportButton } from '@/components/dashboard/ExportButton';
-import { DataTable } from '@/components/dashboard/DataTable';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  ShoppingCart,
-  AlertTriangle,
-  CheckCircle,
-  Target,
-  Activity,
-  BarChart3,
-  ArrowUpRight,
-  ArrowDownRight,
-  Settings,
-  Eye,
-  EyeOff
-} from 'lucide-react';
-import { 
-  calculateKPIs, 
-  calculateSKUBreakdown, 
-  calculatePlatformSpend, 
-  calculateGeographicData,
-  generateChartData,
-  formatCurrency,
-  formatPercentage,
-  formatNumber,
-  filterData,
-  filterAdSpendData
-} from '@/lib/calculations';
-import { 
-  exportDashboardData,
-  downloadCSV,
-  exportOrdersToCSV
-} from '@/lib/export';
-import { DashboardFilters, Order, AdSpendEntry } from '@/lib/types';
+const PLATFORM_CONFIG = [
+  { key: "Taboola", label: "Taboola", icon: History },
+  { key: "Outbrain", label: "Outbrain", icon: Globe },
+  { key: "AdUp", label: "AdUp", icon: Package },
+  { key: "CheckoutChamp", label: "Checkout Champ", icon: DollarSign },
+];
 
 export default function DashboardPage() {
+  // Default date range: 1 year
+  const today = new Date();
+  const oneYearAgo = addYears(today, -1);
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: {
-      from: '2025-01-01',
-      to: '2025-01-31',
+      from: format(oneYearAgo, "yyyy-MM-dd"),
+      to: format(today, "yyyy-MM-dd"),
     },
   });
-  
-  const [allOrders, setAllOrders] = useState<Order[]>([]);
-  const [allAdSpend, setAllAdSpend] = useState<AdSpendEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [chartType, setChartType] = useState<'line' | 'bar' | 'area'>('line');
-  const [chartMetric, setChartMetric] = useState<'revenue' | 'profit' | 'spend'>('revenue');
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'orderId', 'date', 'sku', 'revenue', 'profit', 'country', 'paymentMethod'
-  ]);
-  const [expandedRows, setExpandedRows] = useState<string[]>([]);
+  const [chartType, setChartType] = useState<"bar" | "pie" | "area">("bar");
+  const [selectedPlatform, setSelectedPlatform] = useState<string | "all">("all");
 
-  // Enhanced columns with tooltips and sorting - only include properties that exist in Order interface
-  const enhancedColumns = [
-    { key: 'orderId', label: 'Order ID', visible: visibleColumns.includes('orderId'), sortable: true, tooltip: 'Unique order identifier' },
-    { key: 'date', label: 'Date', visible: visibleColumns.includes('date'), sortable: true, tooltip: 'Order date' },
-    { key: 'sku', label: 'SKU', visible: visibleColumns.includes('sku'), sortable: true, tooltip: 'Stock keeping unit' },
-    { key: 'revenue', label: 'Revenue', visible: visibleColumns.includes('revenue'), sortable: true, tooltip: 'Total revenue from order' },
-    { key: 'profit', label: 'Profit', visible: visibleColumns.includes('profit'), sortable: true, tooltip: 'Net profit after costs' },
-    { key: 'quantity', label: 'Quantity', visible: visibleColumns.includes('quantity'), sortable: true, tooltip: 'Number of items ordered' },
-    { key: 'country', label: 'Country', visible: visibleColumns.includes('country'), sortable: true, tooltip: 'Customer country' },
-    { key: 'paymentMethod', label: 'Payment', visible: visibleColumns.includes('paymentMethod'), sortable: true, tooltip: 'Payment method used' },
-    { key: 'brand', label: 'Brand', visible: visibleColumns.includes('brand'), sortable: true, tooltip: 'Product brand' },
-    { key: 'refund', label: 'Refund', visible: visibleColumns.includes('refund'), sortable: true, tooltip: 'Refund amount' },
-    { key: 'chargeback', label: 'Chargeback', visible: visibleColumns.includes('chargeback'), sortable: true, tooltip: 'Chargeback amount' },
-    { key: 'upsell', label: 'Upsell', visible: visibleColumns.includes('upsell'), sortable: true, tooltip: 'Whether order included upsell' },
-  ];
-
-  const handleRowToggle = (rowId: string) => {
-    setExpandedRows(prev => 
-      prev.includes(rowId) 
-        ? prev.filter(id => id !== rowId)
-        : [...prev, rowId]
-    );
-  };
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        // TODO: Replace with real API calls for orders and ad spend
-        setAllOrders([]); // Set to empty until real API is connected
-        setAllAdSpend([]); // Set to empty until real API is connected
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
-
-  // Apply filters to data
-  const filteredOrders = filterData(allOrders, filters);
-  const filteredAdSpend = filterAdSpendData(allAdSpend, filters);
-
-  // Calculate profit and revenue for orders
-  const ordersWithCalculations = filteredOrders.map(order => {
-    // Revenue is the usdAmount
-    const revenue = order.usdAmount;
-    // Simplified profit calculation (revenue - estimated costs)
-    const estimatedCosts = order.usdAmount * 0.3; // Assume 30% costs
-    const profit = revenue - estimatedCosts;
-    
-    return {
-      ...order,
-      revenue,
-      profit
-    };
+  // Fetch all data using React Query
+  const { data: taboolaData } = useQuery<any[]>({
+    queryKey: ["taboola", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/taboola?fromDate=${filters.dateRange.from}&toDate=${filters.dateRange.to}`);
+      if (!res.ok) return [];
+      const raw = await res.json();
+      return Array.isArray(raw) ? raw : (raw.results || raw.rows || []);
+    },
+  });
+  const { data: adupData } = useQuery<any[]>({
+    queryKey: ["adup", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/adup?fromDate=${filters.dateRange.from}&toDate=${filters.dateRange.to}`);
+      if (!res.ok) return [];
+      const raw = await res.json();
+      return Array.isArray(raw) ? raw : (raw.results || raw.rows || []);
+    },
+  });
+  const { data: outbrainData } = useQuery<any[]>({
+    queryKey: ["outbrain", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/outbrain/performance?from=${filters.dateRange.from}&to=${filters.dateRange.to}`);
+      if (!res.ok) return [];
+      const raw = await res.json();
+      return Array.isArray(raw) ? raw : (raw.results || raw.rows || []);
+    },
+  });
+  const { data: ordersData } = useQuery<Order[]>({
+    queryKey: ["orders", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.results)) return data.results;
+      return [];
+    },
   });
 
-  const kpis = calculateKPIs(filteredOrders, filteredAdSpend, [], []);
-  const skuBreakdown = calculateSKUBreakdown(filteredOrders, kpis);
-  const platformSpend = calculatePlatformSpend(filteredAdSpend);
-  const geographicData = calculateGeographicData(filteredOrders);
-  const chartData = generateChartData(filteredOrders, filteredAdSpend, 30);
-
-  const handleExportAll = () => {
-    exportDashboardData(
-      filteredOrders,
-      filteredAdSpend,
-      kpis,
-      skuBreakdown,
-      platformSpend,
-      geographicData,
-      filters.dateRange
-    );
-  };
-
-  const handleExportOrders = () => {
-    downloadCSV(exportOrdersToCSV(filteredOrders), `orders_${filters.dateRange.from}_to_${filters.dateRange.to}.csv`);
-  };
-
-  const getChartData = () => {
-    switch (chartMetric) {
-      case 'revenue':
-        return chartData.revenueData;
-      case 'profit':
-        return chartData.profitData;
-      case 'spend':
-        return chartData.spendData;
-      default:
-        return chartData.revenueData;
+  // Normalize and group data
+  function normalizeAdSpend(entry: any, platform: string): AdSpendEntry {
+    if (platform === "Outbrain") {
+      // Handle deeply nested structure
+      const metrics = entry.metrics || {};
+      const meta = entry.metadata || {};
+      const budget = entry.budget || {};
+      return {
+        platform,
+        campaignId: meta.id || entry.campaignId || entry.campaign_id || '-',
+        campaignName: meta.name || entry.campaignName || entry.campaign_name || '-',
+        spend: metrics.spend ?? metrics.spent ?? entry.spend ?? entry.spent ?? budget.amount ?? 0,
+        impressions: metrics.impressions ?? entry.impressions ?? 0,
+        clicks: metrics.clicks ?? entry.clicks ?? 0,
+        conversions: metrics.conversions ?? metrics.totalConversions ?? entry.conversions ?? 0,
+        revenue: metrics.sumValue ?? metrics.totalSumValue ?? entry.revenue ?? entry.conversions_value ?? 0,
+        roas: metrics.roas ?? metrics.totalRoas ?? entry.roas ?? null,
+        date: entry.date || meta.startDate || '-',
+        country: entry.country || '-',
+        device: entry.device || '-',
+        adType: entry.adType || meta.creativeFormat || '-',
+      };
     }
-  };
-
-  const renderChart = () => {
-    const data = getChartData();
-    switch (chartType) {
-      case 'line':
-        return <RevenueChart data={data} />;
-      case 'bar':
-        return <BarChart data={data} dataKey="value" xAxisDataKey="date" />;
-      case 'area':
-        return <AreaChart data={data} dataKey="value" xAxisDataKey="date" />;
-      default:
-        return <RevenueChart data={data} />;
-    }
-  };
-
-  // Generate breakdown data for KPI cards
-  const generateKPIBreakdown = (metric: string, data: (Order | AdSpendEntry)[]) => {
-    const byDate = data.reduce((acc, item) => {
-      const date = item.date;
-      if (!acc[date]) acc[date] = 0;
-      acc[date] += (item as any)[metric] || 0;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const byCountry = data.reduce((acc, item) => {
-      const country = (item as any).country;
-      if (!acc[country]) acc[country] = 0;
-      acc[country] += (item as any)[metric] || 0;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const bySKU = data.reduce((acc, item) => {
-      const sku = (item as any).sku;
-      if (!acc[sku]) acc[sku] = 0;
-      acc[sku] += (item as any)[metric] || 0;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const byPlatform = data.reduce((acc, item) => {
-      const platform = (item as any).platform;
-      if (!acc[platform]) acc[platform] = 0;
-      acc[platform] += (item as any)[metric] || 0;
-      return acc;
-    }, {} as Record<string, number>);
-
+    // Default/other platforms
     return {
-      byDate: Object.entries(byDate).map(([date, value]) => ({ date, value: value as number })),
-      byCountry: Object.entries(byCountry).map(([country, value]) => ({ country, value: value as number })),
-      bySKU: Object.entries(bySKU).map(([sku, value]) => ({ sku, value: value as number })),
-      byPlatform: Object.entries(byPlatform).map(([platform, value]) => ({ platform, value: value as number }))
+      platform,
+      campaignId: entry.campaignId || entry.campaign_id || '-',
+      campaignName: entry.campaignName || entry.campaign_name || '-',
+      spend: entry.spend ?? entry.spent ?? 0,
+      impressions: entry.impressions ?? entry.visible_impressions ?? 0,
+      clicks: entry.clicks ?? 0,
+      conversions: entry.conversions ?? entry.cpa_actions_num ?? 0,
+      revenue: entry.revenue ?? entry.conversions_value ?? 0,
+      roas: entry.roas ?? null,
+      date: entry.date || '-',
+      country: entry.country || '-',
+      device: entry.device || '-',
+      adType: entry.adType || '-',
     };
-  };
-
-  const revenueBreakdown = generateKPIBreakdown('revenue', filteredOrders);
-  const profitBreakdown = generateKPIBreakdown('profit', filteredOrders);
-  const ordersBreakdown = generateKPIBreakdown('quantity', filteredOrders);
-  const spendBreakdown = generateKPIBreakdown('spend', filteredAdSpend);
-
-  // Generate raw data for KPI cards
-  const generateRawData = (metric: string, data: (Order | AdSpendEntry)[]) => {
-    return data.map((item, index) => ({
-      id: (item as any).orderId || `item-${index}`,
-      date: item.date,
-      value: (item as any)[metric] || 0,
-      country: (item as any).country,
-      sku: (item as any).sku,
-      platform: (item as any).platform
-    }));
-  };
-
-  const revenueRawData = generateRawData('revenue', filteredOrders);
-  const profitRawData = generateRawData('profit', filteredOrders);
-  const ordersRawData = generateRawData('quantity', filteredOrders);
-  const spendRawData = generateRawData('spend', filteredAdSpend);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 sm:h-32 sm:w-32 border-b-2 border-primary"></div>
-          <p className="mt-4 text-sm sm:text-base text-muted-foreground">Loading dashboard data...</p>
-        </div>
-      </div>
-    );
   }
+  const allAdSpend = [
+    ...(taboolaData || []).map((entry: any) => normalizeAdSpend(entry, "Taboola")),
+    ...(adupData || []).map((entry: any) => normalizeAdSpend(entry, "AdUp")),
+    ...(outbrainData || []).map((entry: any) => normalizeAdSpend(entry, "Outbrain")),
+  ];
+  // Normalize Checkout Champ orders
+  function normalizeOrder(entry: any): Record<string, any> {
+    return {
+      orderId: entry.orderId || entry.id || '-',
+      total: entry.totalAmount ? parseFloat(entry.totalAmount) : 0,
+      refund: entry.refund || 0,
+      chargeback: entry.chargeback || 0,
+      upsell: entry.hasUpsell || false,
+      date: entry.dateCreated || entry.createdAt || '-',
+    };
+  }
+  const allOrders: Record<string, any>[] = Array.isArray(ordersData) ? ordersData.map(normalizeOrder) : [];
 
+  // Filter by platform if selected
+  const filteredAdSpend = selectedPlatform === "all"
+    ? allAdSpend
+    : allAdSpend.filter((row) => row.platform === selectedPlatform);
+  const filteredOrders = selectedPlatform === "all"
+    ? allOrders
+    : allOrders.filter((row) => row.platform === selectedPlatform);
+
+  // Aggregate metrics for each platform
+  function aggregateAdPlatform(platformKey: string) {
+    const rows = allAdSpend.filter(a => a.platform === platformKey);
+    return {
+      spend: rows.reduce((sum, r) => sum + (r.spend || 0), 0),
+      impressions: rows.reduce((sum, r) => sum + (r.impressions || 0), 0),
+      clicks: rows.reduce((sum, r) => sum + (r.clicks || 0), 0),
+      conversions: rows.reduce((sum, r) => sum + (r.conversions || 0), 0),
+    };
+  }
+  // KPI calculations
+  // Gross Revenue: sum of all order totals (only valid numbers)
+  const grossRevenue = allOrders.reduce((sum, o) => sum + (typeof o.total === 'number' && !isNaN(o.total) ? o.total : 0), 0);
+  // Refunds and chargebacks
+  const refundTotal = allOrders.reduce((sum, o) => sum + (o.refund || 0), 0);
+  const chargebackTotal = allOrders.reduce((sum, o) => sum + (o.chargeback || 0), 0);
+  // Net Revenue: gross revenue minus refunds and chargebacks
+  const netRevenue = grossRevenue - refundTotal - chargebackTotal;
+  // Marketing Spend: sum of all ad platform spend
+  const marketingSpend = PLATFORM_CONFIG.filter(p => p.key !== 'CheckoutChamp').reduce((sum, p) => sum + aggregateAdPlatform(p.key).spend, 0);
+  // Net Profit: gross revenue minus marketing spend, refunds, and chargebacks
+  const netProfit = grossRevenue - marketingSpend - refundTotal - chargebackTotal;
+  // Upsell Orders
+  const upsellOrders = allOrders.filter(o => o.upsell).length;
+  const totalOrders = allOrders.length;
+
+  // KPI cards
+  const kpis = [
+    { key: "Gross Revenue", value: grossRevenue, format: "currency" },
+    { key: "Refund Total", value: refundTotal, format: "currency" },
+    { key: "Chargeback Total", value: chargebackTotal, format: "currency" },
+    { key: "Net Revenue", value: netRevenue, format: "currency" },
+    { key: "Marketing Spend", value: marketingSpend, format: "currency" },
+    { key: "Net Profit", value: netProfit, format: "currency" },
+    { key: "Total Orders", value: totalOrders, format: "number" },
+    { key: "Upsell Orders", value: upsellOrders, format: "number" },
+  ];
+
+  // Chart data (shared attributes)
+  const chartOptions = [
+    { key: "spend", label: "Spend" },
+    { key: "impressions", label: "Impressions" },
+    { key: "clicks", label: "Clicks" },
+    { key: "conversions", label: "Conversions" },
+  ];
+  const [chartMetric, setChartMetric] = useState<string>("spend");
+  const chartData = useMemo(() => {
+    // Combined chart for all platforms
+    return PLATFORM_CONFIG.map(({ key, label }) => {
+      const sum = allAdSpend.filter((a) => a.platform === key).reduce((s, a) => s + ((a as Record<string, any>)[chartMetric] || 0), 0);
+      return { name: label, value: sum };
+    });
+  }, [allAdSpend, chartMetric]);
+
+  // Visualization data
+  const adPlatformComparison = PLATFORM_CONFIG.filter(p => p.key !== 'CheckoutChamp').map(p => ({
+    name: p.label,
+    spend: aggregateAdPlatform(p.key).spend,
+    impressions: aggregateAdPlatform(p.key).impressions,
+    clicks: aggregateAdPlatform(p.key).clicks,
+    conversions: aggregateAdPlatform(p.key).conversions,
+  }));
+  // Checkout Champ performance/report time series
+  const checkoutChampTimeSeries = allOrders.map(o => ({
+    date: o.date,
+    revenue: o.total || 0,
+    chargeback: o.chargeback || 0,
+    refund: o.refund || 0,
+    upsell: o.upsell ? 1 : 0,
+  }));
+
+  // Filters UI
   return (
-    <div className="container-responsive space-y-4 sm:space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Real-time insights into your business performance
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <ExportButton onClick={handleExportOrders} icon="file" className="w-full sm:w-auto">
-            Export Orders
-          </ExportButton>
-          <ExportButton onClick={handleExportAll} icon="chart" className="w-full sm:w-auto">
-            Export All Data
-          </ExportButton>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <FilterPanel 
-        filters={filters}
-        onFiltersChange={setFilters}
-        onReset={() => setFilters({
-          dateRange: {
-            from: '2025-01-01',
-            to: '2025-01-31',
-          },
-        })}
-      />
-
-      {/* KPI Cards with Responsive Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="sm:col-span-2 lg:col-span-1">
-        <KPICard
-          title="Gross Revenue"
-          value={kpis.grossRevenue}
-          format="currency"
-          icon={<DollarSign className="h-4 w-4" />}
-          change={5.2}
-          trend="up"
-          breakdown={revenueBreakdown}
-          rawData={revenueRawData}
-          onExport={() => handleExportOrders()}
-        />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-1">
-        <KPICard
-          title="Net Profit"
-          value={kpis.netProfit}
-          format="currency"
-          icon={<TrendingUp className="h-4 w-4" />}
-          change={-2.1}
-          trend="down"
-          breakdown={profitBreakdown}
-          rawData={profitRawData}
-          onExport={() => handleExportOrders()}
-        />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-1">
-        <KPICard
-          title="ROAS"
-          value={kpis.roas}
-          format="number"
-          icon={<Target className="h-4 w-4" />}
-          description="Return on Ad Spend"
-          change={12.5}
-          trend="up"
-        />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-1">
-        <KPICard
-          title="Total Orders"
-          value={kpis.totalOrders}
-          format="number"
-          icon={<ShoppingCart className="h-4 w-4" />}
-          change={8.7}
-          trend="up"
-          breakdown={ordersBreakdown}
-          rawData={ordersRawData}
-          onExport={() => handleExportOrders()}
-        />
-      </div>
-        <div className="sm:col-span-2 lg:col-span-1">
-        <KPICard
-          title="Marketing Spend"
-          value={kpis.marketingSpend}
-          format="currency"
-          icon={<Activity className="h-4 w-4" />}
-          change={8.7}
-          trend="up"
-          breakdown={spendBreakdown}
-          rawData={spendRawData}
-          onExport={() => handleExportAll()}
-        />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-1">
-        <KPICard
-          title="AOV"
-          value={kpis.aov}
-          format="currency"
-          icon={<DollarSign className="h-4 w-4" />}
-          description="Average Order Value"
-          change={2.3}
-          trend="up"
-        />
-        </div>
-      </div>
-
-      {/* Charts Section with Responsive Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <Card className="w-full">
-          <CardHeader className="pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div className="space-y-1">
-                <CardTitle className="text-sm sm:text-base font-semibold">Revenue Analytics</CardTitle>
-                <p className="text-xs text-muted-foreground">Performance over time</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <select 
-                  value={chartMetric}
-                  onChange={(e) => setChartMetric(e.target.value as 'revenue' | 'profit' | 'spend')}
-                  className="text-xs border rounded px-2 py-1 w-full sm:w-auto bg-background"
-                >
-                  <option value="revenue">Revenue</option>
-                  <option value="profit">Profit</option>
-                  <option value="spend">Spend</option>
-                </select>
-                <select 
-                  value={chartType}
-                  onChange={(e) => setChartType(e.target.value as 'line' | 'bar' | 'area')}
-                  className="text-xs border rounded px-2 py-1 w-full sm:w-auto bg-background"
-                >
-                  <option value="line">Line</option>
-                  <option value="bar">Bar</option>
-                  <option value="area">Area</option>
-                </select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {renderChart()}
-          </CardContent>
-        </Card>
-
-        <Card className="w-full">
-          <CardHeader className="pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div className="space-y-1">
-                <CardTitle className="text-sm sm:text-base font-semibold">Platform Distribution</CardTitle>
-                <p className="text-xs text-muted-foreground">Spend across platforms</p>
-              </div>
-              <Badge variant="outline" className="text-xs w-fit">{platformSpend.length} platforms</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <PieChart data={platformSpend} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Interactive Data Table */}
-      <Card className="w-full">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="space-y-1">
-              <CardTitle className="text-sm sm:text-base font-semibold">Order Details</CardTitle>
-              <p className="text-xs text-muted-foreground">Detailed order information with filtering</p>
-            </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <Button variant="outline" size="sm" className="text-xs w-full sm:w-auto">
-                <Eye className="h-3 w-3 mr-1" />
-                Columns
-              </Button>
-              <ExportButton onClick={handleExportOrders} icon="file" size="sm" className="w-full sm:w-auto">
-                Export
-              </ExportButton>
-            </div>
-          </div>
+    <div className="container-responsive space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
         </CardHeader>
-        <CardContent className="p-2 sm:p-6">
-          <DataTable 
-            data={ordersWithCalculations}
-            columns={enhancedColumns}
-            onColumnToggle={(column) => {
-              if (visibleColumns.includes(column)) {
-                setVisibleColumns(visibleColumns.filter(c => c !== column));
-              } else {
-                setVisibleColumns([...visibleColumns, column]);
-              }
-            }}
-            expandable={true}
-            expandedRows={expandedRows}
-            onRowToggle={handleRowToggle}
-          />
+        <CardContent className="flex flex-wrap gap-4 items-center">
+          <div>
+            <label className="block text-xs font-medium mb-1">Platform</label>
+            <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Platforms</SelectItem>
+                {PLATFORM_CONFIG.map((p) => (
+                  <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+        </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">From</label>
+            <Input type="date" value={filters.dateRange.from} onChange={e => setFilters(f => ({ ...f, dateRange: { ...f.dateRange, from: e.target.value } }))} />
+        </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">To</label>
+            <Input type="date" value={filters.dateRange.to} onChange={e => setFilters(f => ({ ...f, dateRange: { ...f.dateRange, to: e.target.value } }))} />
+            </div>
+          </CardContent>
+        </Card>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {kpis.map(kpi => (
+          <KPICard key={kpi.key} title={kpi.key} value={kpi.value} format={kpi.format as any} />
+        ))}
+              </div>
+      {/* Chart Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Platform Comparison ({chartOptions.find(o => o.key === chartMetric)?.label})</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <div className="flex gap-4 items-center mb-4">
+            <Select value={chartMetric} onValueChange={setChartMetric}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {chartOptions.map(opt => (
+                  <SelectItem key={opt.key} value={opt.key}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Tabs value={chartType} onValueChange={v => setChartType(v as any)}>
+              <TabsList>
+                <TabsTrigger value="bar">Bar</TabsTrigger>
+                <TabsTrigger value="pie">Pie</TabsTrigger>
+                <TabsTrigger value="area">Area</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          {chartType === "bar" && <BarChart data={chartData} dataKey="value" xAxisDataKey="name" />}
+          {chartType === "pie" && <PieChart data={chartData} />}
+          {chartType === "area" && <AreaChart data={chartData} dataKey="value" xAxisDataKey="name" />}
         </CardContent>
       </Card>
-
-      {/* Performance Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <Card className="w-full">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
-              <span>Refunds & Chargebacks</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 sm:p-6">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Refund Total</span>
-              <span className="font-medium text-red-600">{formatCurrency(kpis.refundTotal)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Refund Rate</span>
-              <span className="font-medium text-red-600">{formatPercentage(kpis.refundRate)}</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Chargeback Total</span>
-              <span className="font-medium text-orange-600">{formatCurrency(kpis.chargebackTotal)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Chargeback Rate</span>
-              <span className="font-medium text-orange-600">{formatPercentage(kpis.chargebackRate)}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Cost Breakdown</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 sm:p-6">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">COGS</span>
-              <span className="font-medium">{formatCurrency(kpis.cogs)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">OPEX</span>
-              <span className="font-medium">{formatCurrency(kpis.opex)}</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Payment Fees</span>
-              <span className="font-medium">{formatCurrency(kpis.paymentFees)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm font-medium">
-              <span>Net Profit</span>
-              <span className="text-green-600">{formatCurrency(kpis.netProfit)}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full sm:col-span-2 lg:col-span-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-              <Target className="h-4 w-4 text-blue-500" />
-              <span>Customer Metrics</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-4 sm:p-6">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Cost per Customer</span>
-              <span className="font-medium">{formatCurrency(kpis.costPerCustomer)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Upsell Rate</span>
-              <span className="font-medium">{formatPercentage(kpis.upsellRate)}</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">ROAS</span>
-              <span className="font-medium">{kpis.roas.toFixed(2)}x</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">AOV</span>
-              <span className="font-medium">{formatCurrency(kpis.aov)}</span>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Platform Cards Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {PLATFORM_CONFIG.map(({ key, label, icon: Icon }) => (
+          <Card key={key}>
+            <CardHeader className="flex flex-row items-center gap-2">
+              <Icon className="w-5 h-5 text-primary" />
+              <CardTitle>{label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {key !== 'CheckoutChamp' ? (
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="text-xs"><span className="font-medium">Spend:</span> {formatNumber(aggregateAdPlatform(key).spend)}</div>
+                  <div className="text-xs"><span className="font-medium">Impressions:</span> {formatNumber(aggregateAdPlatform(key).impressions)}</div>
+                  <div className="text-xs"><span className="font-medium">Clicks:</span> {formatNumber(aggregateAdPlatform(key).clicks)}</div>
+                  <div className="text-xs"><span className="font-medium">Conversions:</span> {formatNumber(aggregateAdPlatform(key).conversions)}</div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="text-xs"><span className="font-medium">Total Orders:</span> {formatNumber(totalOrders)}</div>
+                  <div className="text-xs"><span className="font-medium">Gross Revenue:</span> {formatNumber(grossRevenue)}</div>
+                  <div className="text-xs"><span className="font-medium">Chargebacks:</span> {formatNumber(chargebackTotal)}</div>
+                  <div className="text-xs"><span className="font-medium">Upsell Orders:</span> {formatNumber(upsellOrders)}</div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
+      {/* Ad Platform Comparison Visualization */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ad Platform Comparison</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BarChart data={adPlatformComparison} dataKey="spend" xAxisDataKey="name" />
+        </CardContent>
+      </Card>
+      <ExportButton
+        onClick={() => {}}
+        icon="file"
+        className="mt-4"
+      >
+        Export Data
+      </ExportButton>
     </div>
   );
 } 

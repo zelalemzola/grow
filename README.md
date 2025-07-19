@@ -242,3 +242,18 @@ For support and questions:
 ---
 
 **Built with ❤️ using Next.js, TypeScript, and modern web technologies**
+
+# Setup: Checkout Champ Credentials
+
+To enable the Checkout Champ integration, you must set the following environment variables in a `.env.local` file at the root of your project:
+
+```
+CHECKOUT_CHAMP_USERNAME=Api-for-wa
+CHECKOUT_CHAMP_PASSWORD=api123api123api
+```
+
+- These credentials are required for the backend to authenticate with the Checkout Champ API.
+- If your server is not whitelisted, you may receive an error from the API (e.g., `IP must be whitelisted`).
+- Make sure to restart your dev server after adding or changing environment variables.
+
+---

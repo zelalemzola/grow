@@ -9,6 +9,7 @@ interface AreaChartProps {
   dataKey: string;
   xAxisDataKey: string;
   color?: string;
+  yAxisFormatter?: (value: number) => string;
 }
 
 export function AreaChart({ 
@@ -17,15 +18,16 @@ export function AreaChart({
   description,
   dataKey,
   xAxisDataKey,
-  color = '#8884d8'
+  color = '#8884d8',
+  yAxisFormatter = formatCurrency
 }: AreaChartProps) {
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean, payload?: any[], label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
           <p className="text-sm font-medium">{`Date: ${label}`}</p>
           <p className="text-sm text-muted-foreground">
-            {`Value: ${formatCurrency(payload[0].value)}`}
+            {`Value: ${yAxisFormatter(payload[0].value)}`}
           </p>
         </div>
       );
@@ -41,11 +43,11 @@ export function AreaChart({
           <XAxis 
             dataKey={xAxisDataKey} 
             className="text-xs"
-            tickFormatter={(value) => new Date(value).toLocaleDateString()}
+            tickFormatter={(value: string) => new Date(value).toLocaleDateString()}
           />
           <YAxis 
             className="text-xs"
-            tickFormatter={(value) => formatCurrency(value)}
+            tickFormatter={yAxisFormatter}
           />
           <Tooltip content={<CustomTooltip />} />
           <Area 

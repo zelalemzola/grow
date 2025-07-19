@@ -217,30 +217,23 @@ export const fetchTaboolaData = async (
   toDate: string
 ): Promise<AdSpendEntry[]> => {
   try {
-    // Use static access token if provided
-    const staticToken = process.env.TABOOLA_ACCESS_TOKEN;
-    let client;
-    if (staticToken) {
-      client = axios.create({
-        baseURL: API_CONFIG.taboola.baseUrl,
-        headers: {
-          Authorization: `Bearer ${staticToken}`,
-        },
-      });
-    } else {
-      client = await createTaboolaClient();
+    const { makeAuthenticatedRequest } = await import('./api-helpers');
+    const accountId = process.env.TABOOLA_ACCOUNT_ID;
+    
+    if (!accountId) {
+      throw new Error('TABOOLA_ACCOUNT_ID must be set in environment variables');
     }
-    const response = await client.get(
-      `/backstage/api/1.0/${API_CONFIG.taboola.accountId}/reports/campaign-summary/dimensions/day`,
-      {
-        params: {
-          start_date: fromDate,
-          end_date: toDate,
-        },
-      }
+    
+    const response = await makeAuthenticatedRequest(
+      'taboola',
+      `https://backstage.taboola.com/backstage/api/1.0/${accountId}/reports/campaign-summary/dimensions/day?start_date=${fromDate}&end_date=${toDate}`
     );
 
-    const data: TaboolaResponse = response.data;
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch Taboola data');
+    }
+
+    const data: TaboolaResponse = response.data as TaboolaResponse;
     return data.results.map((item) => ({
       platform: 'taboola' as const,
       campaignId: 'daily', // Taboola provides daily data
@@ -265,15 +258,18 @@ export const fetchAdUpData = async (
   toDate: string
 ): Promise<AdSpendEntry[]> => {
   try {
-    const client = await createAdUpClient();
-    const response = await client.get('/reports/spend', {
-      params: {
-        start_date: fromDate,
-        end_date: toDate,
-      },
-    });
+    const { makeAuthenticatedRequest } = await import('./api-helpers');
+    
+    const response = await makeAuthenticatedRequest(
+      'adup',
+      `https://api.adup-tech.com/v202101/reports/spend?start_date=${fromDate}&end_date=${toDate}`
+    );
 
-    return response.data.map((item: AdUpResponse) => ({
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch AdUp data');
+    }
+
+    return (response.data as AdUpResponse[]).map((item: AdUpResponse) => ({
       platform: 'adup' as const,
       campaignId: item.campaign_id,
       date: item.date,
@@ -293,32 +289,51 @@ export const fetchCheckoutChampOrders = async (
 ): Promise<Order[]> => {
   try {
     const client = createCheckoutChampClient();
-    const response = await client.get('/transactions/query', {
+    const startDate = new Date(filters.dateRange.from).toLocaleDateString('en-US');
+    const endDate = new Date(filters.dateRange.to).toLocaleDateString('en-US');
+    const response = await client.get('/order/query', {
       params: {
-        from_date: filters.dateRange.from,
-        to_date: filters.dateRange.to,
-        brand: filters.brand,
-        sku: filters.sku,
-        country: filters.country,
-        payment_method: filters.paymentMethod,
+        loginId:process.env.CHECKOUT_CHAMP_USERNAME,
+        password:process.env.CHECKOUT_CHAMP_PASSWORD,
+        startDate,
+        endDate,
       },
     });
 
-    return response.data.map((item: CheckoutChampResponse) => ({
-      orderId: item.orderId,
-      date: item.date,
-      sku: item.sku,
-      quantity: item.quantity,
-      total: item.total,
-      usdAmount: item.usdAmount,
-      paymentMethod: item.paymentMethod,
-      refund: item.refund,
-      chargeback: item.chargeback,
-      upsell: item.upsell,
-    }));
+    // Extract the orders array from the API response
+    const apiData = response.data;
+    if (
+      apiData &&
+      apiData.result === "SUCCESS" &&
+      apiData.message &&
+      Array.isArray(apiData.message.data)
+    ) {
+      // Map each order to include sku (all SKUs, comma-separated) and upsell (true if any item is an upsell)
+      return apiData.message.data.map((order: any) => {
+        let sku = '-';
+        let upsell = false;
+        if (order.items && typeof order.items === 'object') {
+          const itemsArr = Object.values(order.items);
+          sku = itemsArr.map((item: any) => item.productSku).filter(Boolean).join(', ');
+          upsell = itemsArr.some((item: any) => item.productType === 'UPSALE');
+        }
+        return {
+          ...order,
+          sku,
+          upsell,
+        };
+      });
+    }
+    // If the API did not return a success, throw the error message if available
+    throw new Error(
+      apiData && apiData.message && typeof apiData.message === 'string'
+        ? apiData.message
+        : 'Unknown error from Checkout Champ API'
+    );
   } catch (error) {
     console.error('Error fetching Checkout Champ orders:', error);
-    return [];
+    // Throw the error so it can be handled by the API route
+    throw error;
   }
 };
 
