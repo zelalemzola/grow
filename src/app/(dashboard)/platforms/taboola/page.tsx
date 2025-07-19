@@ -20,6 +20,7 @@ import { BarChart } from '@/components/dashboard/BarChart';
 import { PieChart } from '@/components/dashboard/PieChart';
 import { parseISO, format as formatDate } from 'date-fns';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
+import { getEurToUsdRate } from '@/lib/utils';
 
 function useTaboolaAdvertisers() {
   return useQuery({
@@ -45,8 +46,8 @@ function useTaboolaCampaigns(accountId?: string) {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
-        if (!res.ok) throw new Error("Failed to fetch campaigns");
-        return res.json();
+      if (!res.ok) throw new Error("Failed to fetch campaigns");
+      return res.json();
       } catch (error: any) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
@@ -253,12 +254,23 @@ export default function TaboolaPage() {
     return countryMatch && brandingMatch && statusMatch;
   });
 
+  // Fetch EUR to USD rate
+  const { data: eurToUsdRateData } = useQuery<number>({
+    queryKey: ['eur-usd-rate'],
+    queryFn: getEurToUsdRate,
+    staleTime: 24 * 60 * 60 * 1000, // 1 day
+    retry: 1,
+  });
+  const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+
   // Aggregate KPIs from reports
   const kpiTotals = useMemo(() => {
     if (!reports || !Array.isArray(reports)) return null;
     return reports.reduce(
       (acc: any, row: any) => {
-        acc.spend += Number(row.spent ?? row.spend ?? 0);
+        const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+        const spend = isEUR ? Number(row.spent ?? row.spend ?? 0) * EUR_TO_USD : Number(row.spent ?? row.spend ?? 0);
+        acc.spend += spend;
         acc.impressions += Number(row.impressions ?? 0);
         acc.clicks += Number(row.clicks ?? 0);
         acc.conversions += Number(row.cpa_actions_num ?? 0);
@@ -272,7 +284,7 @@ export default function TaboolaPage() {
       },
       { spend: 0, impressions: 0, clicks: 0, conversions: 0, roasSum: 0, ctrSum: 0, cpcSum: 0, cpmSum: 0, cpaSum: 0, rows: 0 }
     );
-  }, [reports]);
+  }, [reports, EUR_TO_USD]);
 
   const kpiCards = [
     {
@@ -351,11 +363,14 @@ export default function TaboolaPage() {
   // Prepare chart data with formatted date
   const spendOverTime = useMemo(() => {
     if (!reports) return [];
-    return reports.map((row: any) => ({
+    return reports.map((row: any) => {
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      return {
       date: row.date ? formatDate(parseISO(row.date.slice(0, 10)), 'yyyy-MM-dd') : '',
-      spend: Number(row.spent ?? row.spend ?? 0)
-    })).filter((d: { date: string; spend: number }) => d.date && !isNaN(d.spend));
-  }, [reports]);
+        spend: isEUR ? Number(row.spent ?? row.spend ?? 0) * EUR_TO_USD : Number(row.spent ?? row.spend ?? 0)
+      };
+    }).filter((d: { date: string; spend: number }) => d.date && !isNaN(d.spend));
+  }, [reports, EUR_TO_USD]);
 
   const conversionsOverTime = useMemo(() => {
     if (!reports) return [];
@@ -373,13 +388,14 @@ export default function TaboolaPage() {
       const campaignId = row.campaign_id || row.campaign;
       const campaign = campaignMap.get(campaignId);
       const branding = campaign?.branding_text || 'Unknown';
-      const spend = Number(row.spent ?? row.spend ?? 0);
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      const spend = isEUR ? Number(row.spent ?? row.spend ?? 0) * EUR_TO_USD : Number(row.spent ?? row.spend ?? 0);
       map.set(branding, (map.get(branding) || 0) + spend);
     });
     const arr = Array.from(map.entries()).map(([name, value]) => ({ name, value }));
     const total = arr.reduce((sum, item) => sum + item.value, 0);
     return arr.map(item => ({ ...item, percentage: total > 0 ? (item.value / total) * 100 : 0 }));
-  }, [reports, campaignMap]);
+  }, [reports, campaignMap, EUR_TO_USD]);
 
   // Aggregate spend by country using campaign info
   const spendByCountry = useMemo(() => {
@@ -391,13 +407,14 @@ export default function TaboolaPage() {
       const country = Array.isArray(campaign?.country_targeting?.value) && campaign.country_targeting.value.length > 0
         ? campaign.country_targeting.value[0]
         : 'Unknown';
-      const spend = Number(row.spent ?? row.spend ?? 0);
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      const spend = isEUR ? Number(row.spent ?? row.spend ?? 0) * EUR_TO_USD : Number(row.spent ?? row.spend ?? 0);
       map.set(country, (map.get(country) || 0) + spend);
     });
     const arr = Array.from(map.entries()).map(([name, value]) => ({ name, value }));
     const total = arr.reduce((sum, item) => sum + item.value, 0);
     return arr.map(item => ({ ...item, percentage: total > 0 ? (item.value / total) * 100 : 0 }));
-  }, [reports, campaignMap]);
+  }, [reports, campaignMap, EUR_TO_USD]);
 
   // Alternative: Campaign distribution by country (when spend data is limited)
   const campaignsByCountry = useMemo(() => {

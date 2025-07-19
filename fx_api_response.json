@@ -1,0 +1,51 @@
+{
+	"info": {
+		"_postman_id": "3fa93845-621a-44c7-9329-eeb391ecf750",
+		"name": "New Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "42794888"
+	},
+	"item": [
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://api.freecurrencyapi.com/v1/latest?apikey=fca_live_tZBuTeQCjIJnyrE67mXRWq70cV9h8TER5zTptyR7&base_currency=EUR&currencies=USD",
+					"protocol": "https",
+					"host": [
+						"api",
+						"freecurrencyapi",
+						"com"
+					],
+					"path": [
+						"v1",
+						"latest"
+					],
+					"query": [
+						{
+							"key": "apikey",
+							"value": "fca_live_tZBuTeQCjIJnyrE67mXRWq70cV9h8TER5zTptyR7"
+						},
+						{
+							"key": "base_currency",
+							"value": "EUR"
+						},
+						{
+							"key": "currencies",
+							"value": "USD"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+				    "data": {
+				        "USD": 1.1645102106
+				    }
+				}
+			]
+		}
+	]
+}

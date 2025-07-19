@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import ReactQueryProvider from './ReactQueryProvider';
+import { ClerkProvider } from '@clerk/nextjs';
 
 const geist = Geist({
   variable: '--font-geist-sans',
@@ -15,12 +16,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Grow Analytics - Accounting Automation Dashboard',
+  title: 'Growevity Analytics - Accounting Automation Dashboard',
   description: 'Real-time insights into your business performance with automated accounting and ad spend tracking.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+  <ClerkProvider>
     <html lang="en" suppressHydrationWarning>
       <body className={`${geist.variable} ${geistMono.variable} antialiased`}>
         <ReactQueryProvider>
@@ -30,5 +32,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </ReactQueryProvider>
       </body>
     </html>
+    </ClerkProvider>
   );
 }

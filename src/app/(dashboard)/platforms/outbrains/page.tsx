@@ -19,6 +19,7 @@ import { PieChart } from '@/components/dashboard/PieChart';
 import { AreaChart } from '@/components/dashboard/AreaChart';
 import { BarChart } from '@/components/dashboard/BarChart';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
+import { getEurToUsdRate } from '@/lib/utils';
 
 const KPI_LIST = [
   {
@@ -51,10 +52,10 @@ const KPI_LIST = [
   },
   {
     key: 'revenue',
-    title: 'Revenue',
+    title: 'Outbrain-Reported Revenue',
     format: 'currency',
     icon: <PieChartIcon className="h-5 w-5 text-primary" />,
-    description: 'Total attributed revenue',
+    description: 'Revenue attributed by Outbrain pixel',
   },
   {
     key: 'roas',
@@ -117,23 +118,34 @@ const OutbrainsPage = () => {
     enabled: !!selectedMarketer,
   });
 
+  // Fetch EUR to USD rate
+  const { data: eurToUsdRateData } = useQuery<number>({
+    queryKey: ['eur-usd-rate'],
+    queryFn: getEurToUsdRate,
+    staleTime: 24 * 60 * 60 * 1000, // 1 day
+    retry: 1,
+  });
+  const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+
   // Aggregate KPI totals from the performance data
   const kpiTotals = useMemo(() => {
     if (!perfData || !Array.isArray(perfData)) return null;
     return perfData.reduce(
       (acc: any, row: any) => {
-        // Outbrain API: metrics are in row.metrics, metadata in row.metadata
         const m = row.metrics || {};
-        acc.spend += Number(m.spend || 0);
+        const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+        const spend = isEUR ? Number(m.spend || 0) * EUR_TO_USD : Number(m.spend || 0);
+        const revenue = isEUR ? Number(m.sumValue || 0) * EUR_TO_USD : Number(m.sumValue || 0);
+        acc.spend += spend;
         acc.impressions += Number(m.impressions || 0);
         acc.clicks += Number(m.clicks || 0);
         acc.conversions += Number(m.conversions || 0);
-        acc.revenue += Number(m.sumValue || 0);
+        acc.revenue += revenue;
         return acc;
       },
       { spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 }
     );
-  }, [perfData]);
+  }, [perfData, EUR_TO_USD]);
   if (kpiTotals) {
     kpiTotals.roas = kpiTotals.spend > 0 ? kpiTotals.revenue / kpiTotals.spend : 0;
     kpiTotals.ctr = kpiTotals.impressions > 0 ? (kpiTotals.clicks / kpiTotals.impressions) * 100 : 0;
@@ -210,11 +222,11 @@ const OutbrainsPage = () => {
   // 2. Daily Spend Trends
   const dailySpendTrends = useMemo(() => {
     if (!perfData || !Array.isArray(perfData) || perfData.length === 0) return [];
-    
     const dailySpend = new Map<string, number>();
     perfData.forEach((row: any) => {
       const date = row.metadata?.date || row.date;
-      const spend = Number(row.metrics?.spend || 0);
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      const spend = isEUR ? Number(row.metrics?.spend || 0) * EUR_TO_USD : Number(row.metrics?.spend || 0);
       if (date && spend > 0) {
         dailySpend.set(date, (dailySpend.get(date) || 0) + spend);
       }
@@ -223,22 +235,21 @@ const OutbrainsPage = () => {
     return Array.from(dailySpend.entries())
       .map(([date, spend]) => ({ date, spend }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [perfData]);
+  }, [perfData, EUR_TO_USD]);
 
   // 3. ROAS Distribution
   const roasDistribution = useMemo(() => {
     if (!perfData || !Array.isArray(perfData) || perfData.length === 0) return [];
-    
     const roasRanges = {
       '0-1x': 0,
       '1-2x': 0,
       '2-5x': 0,
       '5x+': 0
     };
-    
     perfData.forEach((row: any) => {
-      const spend = Number(row.metrics?.spend || 0);
-      const revenue = Number(row.metrics?.sumValue || 0);
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      const spend = isEUR ? Number(row.metrics?.spend || 0) * EUR_TO_USD : Number(row.metrics?.spend || 0);
+      const revenue = isEUR ? Number(row.metrics?.sumValue || 0) * EUR_TO_USD : Number(row.metrics?.sumValue || 0);
       if (spend > 0) {
         const roas = revenue / spend;
         if (roas < 1) roasRanges['0-1x']++;
@@ -247,16 +258,14 @@ const OutbrainsPage = () => {
         else roasRanges['5x+']++;
       }
     });
-    
     return Object.entries(roasRanges)
       .map(([range, count]) => ({ name: range, value: count }))
       .filter(item => item.value > 0);
-  }, [perfData]);
+  }, [perfData, EUR_TO_USD]);
 
   // 4. Spend Distribution
   const spendDistribution = useMemo(() => {
     if (!perfData || !Array.isArray(perfData) || perfData.length === 0) return [];
-    
     const spendRanges = {
       '0-100': 0,
       '100-500': 0,
@@ -264,9 +273,9 @@ const OutbrainsPage = () => {
       '1000-5000': 0,
       '5000+': 0
     };
-    
     perfData.forEach((row: any) => {
-      const spend = Number(row.metrics?.spend || 0);
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      const spend = isEUR ? Number(row.metrics?.spend || 0) * EUR_TO_USD : Number(row.metrics?.spend || 0);
       if (spend > 0) {
         if (spend <= 100) spendRanges['0-100']++;
         else if (spend <= 500) spendRanges['100-500']++;
@@ -275,11 +284,10 @@ const OutbrainsPage = () => {
         else spendRanges['5000+']++;
       }
     });
-    
     return Object.entries(spendRanges)
       .map(([range, count]) => ({ name: range, value: count }))
       .filter(item => item.value > 0);
-  }, [perfData]);
+  }, [perfData, EUR_TO_USD]);
 
   // 5. Daily Conversion Trends
   const dailyConversionTrends = useMemo(() => {

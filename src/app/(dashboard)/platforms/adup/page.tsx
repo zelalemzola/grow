@@ -11,6 +11,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { Download, TrendingUp, TrendingDown, BarChart3, MousePointerClick, Eye, DollarSign } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { getEurToUsdRate } from '@/lib/utils';
 
 const REPORTS = [
   {
@@ -127,6 +128,15 @@ export default function AdUpPage() {
     refetchOnWindowFocus: false,
   });
 
+  // Fetch EUR to USD rate
+  const { data: eurToUsdRateData } = useQuery<number>({
+    queryKey: ['eur-usd-rate'],
+    queryFn: getEurToUsdRate,
+    staleTime: 24 * 60 * 60 * 1000, // 1 day
+    retry: 1,
+  });
+  const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+
   // Collect all keys for columns
   const allKeys = useMemo(() => {
     if (!data?.rows || !Array.isArray(data.rows)) return [];
@@ -138,7 +148,12 @@ export default function AdUpPage() {
   // KPI calculations
   const kpis = useMemo(() => {
     if (!data?.rows || !Array.isArray(data.rows)) return null;
-    const sum = (key: string) => data.rows.reduce((acc: number, row: any) => acc + (Number(row[key]) || 0), 0);
+    const sum = (key: string) => data.rows.reduce((acc: number, row: any) => {
+      const isEUR = row.currencyCode === 'EUR' || row.currencySymbol === '€';
+      let value = Number(row[key]) || 0;
+      if (['Cost'].includes(key) && isEUR) value = value * EUR_TO_USD;
+      return acc + value;
+    }, 0);
     const clicks = sum("Clicks");
     const impressions = sum("Impressions");
     const cost = sum("Cost");
@@ -186,7 +201,7 @@ export default function AdUpPage() {
         change: 0,
       },
     ];
-  }, [data]);
+  }, [data, EUR_TO_USD]);
 
   // Columns for DataTable
   const columns = allKeys.map((key) => ({
@@ -253,12 +268,12 @@ export default function AdUpPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="p-0">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
+                <Calendar
+                  mode="single"
+                  selected={startDate}
+                  onSelect={setStartDate}
                       initialFocus
-                    />
+                />
                   </PopoverContent>
                 </Popover>
               </div>
@@ -274,12 +289,12 @@ export default function AdUpPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="p-0">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
+                <Calendar
+                  mode="single"
+                  selected={endDate}
+                  onSelect={setEndDate}
                       initialFocus
-                    />
+                />
                   </PopoverContent>
                 </Popover>
               </div>

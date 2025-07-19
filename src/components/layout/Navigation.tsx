@@ -43,6 +43,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
 import { useState } from 'react';
+import { UserButton } from '@clerk/nextjs';
 
 const navItems = [
   {
@@ -52,9 +53,9 @@ const navItems = [
     group: 'main'
   },
   {
-    href: '/platforms',
-    label: 'Platform Comparison',
-    icon: Target,
+    href: '/opex',
+    label: 'OPEX Management',
+    icon: Calculator,
     group: 'main'
   },
   {
@@ -149,13 +150,10 @@ export function Navigation({ children }: { children: React.ReactNode }) {
         <SidebarContent className="px-2 group-data-[collapsible=icon]:px-1">
           {renderNavItems()}
         </SidebarContent>
-        {/* <SidebarFooter className="border-t px-4 py-4 group-data-[collapsible=icon]:px-2">
+        <SidebarFooter className="border-t px-4 py-4 group-data-[collapsible=icon]:px-2">
           <div className="flex items-center justify-between">
-            <SidebarMenuButton asChild tooltip="Settings">
-              <Link href="/settings">
-                <Settings className="w-4 h-4" />
-                <span className="group-data-[collapsible=icon]:hidden">Settings</span>
-              </Link>
+            <SidebarMenuButton >
+            <UserButton />
             </SidebarMenuButton>
             <Button
               variant="ghost"
@@ -168,7 +166,7 @@ export function Navigation({ children }: { children: React.ReactNode }) {
               <span className="sr-only">Toggle theme</span>
             </Button>
           </div>
-        </SidebarFooter> */}
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b px-4">

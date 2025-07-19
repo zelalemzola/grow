@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { DollarSign, AlertTriangle, Target, Users, BarChart3, Package } from "lucide-react";
 import { FilterPanel } from "@/components/dashboard/FilterPanel";
 import { DataTable } from "@/components/dashboard/DataTable";
 import { ExportButton } from "@/components/dashboard/ExportButton";
@@ -24,6 +25,10 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AreaChart } from '@/components/dashboard/AreaChart';
+import { PieChart } from '@/components/dashboard/PieChart';
+import { BarChart } from '@/components/dashboard/BarChart';
+import { getEurToUsdRate } from '@/lib/utils';
 
 // Enhanced order type with attribution data
 interface EnhancedOrder extends Order {
@@ -76,9 +81,11 @@ const fetchAdSpendData = async (filters: DashboardFilters): Promise<AdSpendEntry
       max: to
     }
   };
+  // Get Taboola account ID from env (local only)
+  const accountId = 'growevity-network';
   const [outbrainRes, taboolaRes, adupRes] = await Promise.allSettled([
     fetch(`/api/outbrain/performance?from=${from}&to=${to}`),
-    fetch(`/api/taboola/campaigns?from=${from}&to=${to}`),
+    fetch(`/api/taboola/campaigns?account_id=${accountId}&from=${from}&to=${to}`),
     fetch('/api/adup/report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -156,41 +163,43 @@ const fetchAdSpendData = async (filters: DashboardFilters): Promise<AdSpendEntry
 
 // Correlate orders with ad spend data
 const correlateOrdersWithAdSpend = (orders: Order[], adSpend: AdSpendEntry[]): EnhancedOrder[] => {
+  const knownPlatforms = ['outbrain', 'taboola', 'adup'];
   return orders.map((order: any) => {
     const enhancedOrder: EnhancedOrder = {
       ...order,
-      utmSource: order.UTMSource || null,
-      utmMedium: order.UTMMedium || null,
-      utmCampaign: order.UTMCampaign || null,
-      utmTerm: order.UTMTerm || null,
-      utmContent: order.UTMContent || null,
+      utmSource: order.UTMSource || order.utmSource || null,
+      utmMedium: order.UTMMedium || order.utmMedium || null,
+      utmCampaign: order.UTMCampaign || order.utmCampaign || null,
+      utmTerm: order.UTMTerm || order.utmTerm || null,
+      utmContent: order.UTMContent || order.utmContent || null,
       campaignName: order.campaignName || null,
       funnelReferenceId: order.funnelReferenceId || null,
     };
 
-    // Find matching ad spend based on platform, campaign name, UTM, or marketer/advertiser
+    // 1. Use utmSource for direct attribution if possible
+    const utmSource = (enhancedOrder.utmSource || '').toLowerCase();
+    if (knownPlatforms.includes(utmSource)) {
+      enhancedOrder.attributedPlatform = utmSource.charAt(0).toUpperCase() + utmSource.slice(1);
+      // Optionally, try to find spend for this platform
+      const spendEntry = adSpend.find(spend => spend.platform.toLowerCase() === utmSource);
+      if (spendEntry) {
+        enhancedOrder.attributedSpend = spendEntry.spend;
+        enhancedOrder.roas = (enhancedOrder.usdAmount && spendEntry.spend)
+          ? enhancedOrder.usdAmount / spendEntry.spend
+          : undefined;
+      }
+      return enhancedOrder;
+    }
+
+    // 2. Otherwise, use existing matching logic
     const matchingAdSpend = adSpend.find(spend => {
       // Match by marketerId/advertiserId if present
       if (order.marketerId && spend.marketerId && order.marketerId === spend.marketerId) return true;
       if (order.advertiserId && spend.advertiserId && order.advertiserId === spend.advertiserId) return true;
       // Match by campaign name (case-insensitive, partial)
       if (order.campaignName && spend.campaignName &&
-          order.campaignName.toLowerCase().includes(spend.campaignName.toLowerCase())) {
-        return true;
-      }
-      // Match by UTM campaign
-      if (order.UTMCampaign && spend.campaignName &&
-          order.UTMCampaign.toLowerCase().includes(spend.campaignName.toLowerCase())) {
-        return true;
-      }
-      // Match by platform and date proximity
-      const orderDateStr = order.dateCreated || order.date;
-      const spendDateStr = spend.date;
-      if (!orderDateStr || !spendDateStr) return false;
-      const orderDate = new Date(orderDateStr);
-      const spendDate = new Date(spendDateStr);
-      const dateDiff = Math.abs(orderDate.getTime() - spendDate.getTime()) / (1000 * 60 * 60 * 24);
-      return dateDiff <= 7; // Within 7 days
+          order.campaignName.toLowerCase().includes(spend.campaignName.toLowerCase())) return true;
+      return false;
     });
 
     if (matchingAdSpend) {
@@ -213,17 +222,84 @@ export default function CheckoutChampPlatformPage() {
     },
   });
 
-  // Fetch orders
+  // Correct useQuery usage: queryKey, queryFn, options
+  // If using React Query v3, use this signature:
+  const { data: eurToUsdRateData } = useQuery<number>({
+    queryKey: ['eur-usd-rate'],
+    queryFn: getEurToUsdRate,
+    staleTime: 24 * 60 * 60 * 1000, // 1 day
+    retry: 1,
+  });
+  const eurToUsdRate: number = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+
   const { data: ordersData, isLoading: ordersLoading, error: ordersError } = useQuery<Order[]>({
-    queryKey: ["checkoutchamp-orders", filters],
+    queryKey: ['checkoutchamp-orders', filters],
     queryFn: () => fetchCheckoutChampOrders(filters),
   });
 
-  // Fetch ad spend data
   const { data: adSpendData, isLoading: adSpendLoading, error: adSpendError } = useQuery<AdSpendEntry[]>({
-    queryKey: ["ad-spend", filters],
+    queryKey: ['ad-spend', filters],
     queryFn: () => fetchAdSpendData(filters),
   });
+
+  // Fetch product cost data for COGS calculation
+  const { data: productsData } = useQuery<any[]>({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) return [];
+      const raw = await res.json();
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        return Object.values(raw);
+      }
+      return Array.isArray(raw) ? raw : [];
+    },
+  });
+
+  // Extract product cost data
+  const productArray = Array.isArray(productsData) && productsData[3] && Array.isArray(productsData[3]) 
+    ? productsData[3] 
+    : [];
+
+  const skuCosts = productArray
+    .filter((p: any) => p && typeof p === 'object' && ('productSku' in p || 'productId' in p))
+    .map((p: any) => ({
+      sku: (p.productSku || '').trim().toUpperCase(),
+      productId: p.productId ? p.productId.toString().trim() : '',
+      unitCogs: Number(p.productCost) || 0,
+      shippingCost: Number(p.shippingCost) || 0,
+      handlingFee: 0,
+    }));
+
+  // COGS calculation function
+  const calculateCOGS = (orders: Order[]) => {
+    let totalCogs = 0;
+    orders.forEach(order => {
+      if (!order.items) return;
+      Object.values(order.items).forEach((item: any) => {
+        const itemSku = (item.productSku || '').trim().toUpperCase();
+        const itemProductId = (item.productId || '').toString().trim();
+        const itemQty = Number(item.qty) || 0;
+        // Try to match by SKU first, then by productId
+        const skuCost = skuCosts.find(cost =>
+          (cost.sku && cost.sku.trim().toUpperCase() === itemSku) ||
+          (cost.productId && cost.productId.toString().trim() === itemProductId)
+        );
+        if (skuCost) {
+          // Convert EUR costs to USD using the conversion rate
+          const unitCogsUSD = skuCost.unitCogs * eurToUsdRate;
+          const shippingCostUSD = skuCost.shippingCost * eurToUsdRate;
+          const handlingFeeUSD = (skuCost.handlingFee || 0) * eurToUsdRate;
+          const orderCogs = (unitCogsUSD * itemQty) + shippingCostUSD + handlingFeeUSD;
+          totalCogs += orderCogs;
+        }
+      });
+    });
+    return totalCogs;
+  };
 
   // Ensure data is always arrays
   const orders = Array.isArray(ordersData) ? ordersData : [];
@@ -244,13 +320,23 @@ export default function CheckoutChampPlatformPage() {
     } else if (typeof o.sku === 'string') {
       sku = o.sku;
     }
+    // Currency conversion logic
+    const isEUR = o.currencyCode === 'EUR' || o.currencySymbol === '€';
+    // Use dynamic rate
+    const EUR_TO_USD = eurToUsdRate;
+    // Get raw values
+    const rawTotal = o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : (o.price !== undefined && o.price !== null ? Number(o.price) : 0);
+    const rawUsdAmount = o.usdAmount !== undefined && o.usdAmount !== null ? Number(o.usdAmount) : (o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : 0);
+    // Convert if needed
+    const total = isEUR ? rawTotal * EUR_TO_USD : rawTotal;
+    const usdAmount = isEUR ? rawUsdAmount * EUR_TO_USD : rawUsdAmount;
     return {
       orderId: o.orderId || o.clientOrderId || '-',
       date: o.dateCreated || '-',
       sku,
       quantity: o.quantity || (o.items ? Object.values(o.items).reduce((sum: number, item: any) => sum + (item.quantity ? Number(item.quantity) : 0), 0) : 1),
-      total: o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : (o.price !== undefined && o.price !== null ? Number(o.price) : 0),
-      usdAmount: o.usdAmount !== undefined && o.usdAmount !== null ? Number(o.usdAmount) : (o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : 0),
+      total,
+      usdAmount,
       paymentMethod: o.paymentMethod || o.paySource || '-',
       refund: o.refund || 0,
       chargeback: o.chargeback || 0,
@@ -299,6 +385,13 @@ export default function CheckoutChampPlatformPage() {
   const totalAttributedSpend = filteredOrders.reduce((sum, o) => sum + (o.attributedSpend || 0), 0);
   const averageROAS = totalAttributedSpend > 0 ? (totalRevenue / totalAttributedSpend) : 0;
   const attributedOrders = filteredOrders.filter((o) => o.attributedPlatform !== '-').length;
+  // Convert filteredOrders back to Order[] format for COGS calculation
+  const ordersForCOGS = filteredOrders.map(o => ({
+    ...o,
+    upsell: o.upsell === 'Yes'
+  })) as Order[];
+  const totalCOGS = calculateCOGS(ordersForCOGS);
+  const averageCOGS = totalOrders > 0 ? totalCOGS / totalOrders : 0;
 
   // DataTable columns
   const columns = [
@@ -319,7 +412,7 @@ export default function CheckoutChampPlatformPage() {
     { key: "utmCampaign", label: "UTM Campaign", visible: false },
     { key: "attributedPlatform", label: "Attributed Platform", visible: true },
     { key: "attributedSpend", label: "Attributed Spend", visible: true },
-    { key: "roas", label: "ROAS", visible: true },
+    // Removed ROAS column
   ];
 
   // DataTable column toggle handler
@@ -368,11 +461,7 @@ export default function CheckoutChampPlatformPage() {
             View and analyze orders from Checkout Champ with ad platform attribution and ROAS analysis.
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <ExportButton onClick={() => {}} icon="file" className="w-full sm:w-auto">
-            Export Data
-          </ExportButton>
-        </div>
+       
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
@@ -383,47 +472,159 @@ export default function CheckoutChampPlatformPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <Card className="w-full">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center space-x-2">
-                <span>Order KPIs</span>
-              </CardTitle>
+          {/* KPI Cards - Modern Grouped Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 my-6">
+            {/* Revenue & Orders */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <DollarSign className="w-5 h-5 text-yellow-300" />
+                <CardTitle className="text-base">Revenue & Orders</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="flex justify-between"><span>Total Order Revenue</span><span className={"font-semibold " + (totalRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(totalRevenue)}</span></div>
+                <Separator className="my-2" />
+                <div className="flex justify-between"><span>Total Orders</span><span>{formatNumber(totalOrders)}</span></div>
+                <div className="flex justify-between"><span>Upsell Orders</span><span className={totalUpsells > 0 ? "text-green-500" : ""}>{formatNumber(totalUpsells)}</span></div>
+              </CardContent>
+            </Card>
+            {/* Refunds & Chargebacks */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                <CardTitle className="text-base">Refunds & Chargebacks</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="flex justify-between"><span>Refunds</span><span className="text-red-500 font-semibold">{formatCurrency(totalRefunds)}</span></div>
+                <div className="flex justify-between"><span>Chargebacks</span><span className="text-red-500 font-semibold">{formatCurrency(totalChargebacks)}</span></div>
+              </CardContent>
+            </Card>
+            {/* Attribution */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Target className="w-5 h-5 text-blue-400" />
+                <CardTitle className="text-base">Attribution</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="flex justify-between"><span>Attributed Orders</span><span>{formatNumber(attributedOrders)}</span></div>
+                <div className="flex justify-between"><span>Attributed Spend</span><span className={totalAttributedSpend > 0 ? "text-red-500" : ""}>{formatCurrency(totalAttributedSpend)}</span></div>
+                <div className="flex justify-between"><span>Avg. ROAS</span><span className={averageROAS > 1 ? "text-green-500" : averageROAS < 1 ? "text-red-500" : ""}>{averageROAS.toFixed(2)}x</span></div>
+              </CardContent>
+            </Card>
+            {/* Customer Metrics */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Users className="w-5 h-5 text-green-400" />
+                <CardTitle className="text-base">Customer Metrics</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <div className="text-xs text-muted-foreground">Total Revenue</div>
-                <div className="font-bold text-lg">{formatCurrency(totalRevenue)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total Orders</div>
-                <div className="font-bold text-lg">{formatNumber(totalOrders)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Refunds</div>
-                <div className="font-bold text-lg">{formatCurrency(totalRefunds)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Chargebacks</div>
-                <div className="font-bold text-lg">{formatCurrency(totalChargebacks)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Upsell Orders</div>
-                <div className="font-bold text-lg">{formatNumber(totalUpsells)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Attributed Orders</div>
-                <div className="font-bold text-lg">{formatNumber(attributedOrders)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total Ad Spend</div>
-                <div className="font-bold text-lg">{formatCurrency(totalAttributedSpend)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Avg ROAS</div>
-                <div className="font-bold text-lg">{averageROAS > 0 ? `${(averageROAS * 100).toFixed(1)}%` : 'N/A'}</div>
-              </div>
+              <CardContent className="space-y-1">
+                <div className="flex justify-between"><span>Unique Customers</span><span>{formatNumber(new Set(filteredOrders.map(o => o.orderId)).size)}</span></div>
+                <div className="flex justify-between"><span>Avg. Order Value</span><span className={totalOrders > 0 && totalRevenue > 0 ? "text-green-500" : ""}>{totalOrders > 0 ? formatCurrency(totalRevenue / totalOrders) : "$0.00"}</span></div>
             </CardContent>
           </Card>
+          {/* COGS */}
+          <Card>
+            <CardHeader className="flex flex-row items-center gap-2">
+              <Package className="w-5 h-5 text-purple-400" />
+              <CardTitle className="text-base">COGS</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <div className="flex justify-between"><span>Total COGS</span><span className={totalCOGS > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(totalCOGS)}</span></div>
+              <div className="flex justify-between"><span>Avg. COGS per Order</span><span className={averageCOGS > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(averageCOGS)}</span></div>
+            </CardContent>
+          </Card>
+          </div>
+
+          {/* Orders Over Time */}
+          <AreaChart
+            data={(() => {
+              // Group by date
+              const grouped: Record<string, number> = {};
+              mappedOrders.forEach(o => {
+                if (o.date && o.date !== '-') {
+                  grouped[o.date] = (grouped[o.date] || 0) + 1;
+                }
+              });
+              return Object.entries(grouped).map(([date, count]) => ({ date, count }));
+            })()}
+            title="Orders Over Time"
+            dataKey="count"
+            xAxisDataKey="date"
+            color="#3b82f6"
+            yAxisFormatter={formatNumber}
+          />
+
+          {/* Orders by Country */}
+          <PieChart
+            data={(() => {
+              const grouped: Record<string, number> = {};
+              mappedOrders.forEach(o => {
+                if (o.country && o.country !== '-') {
+                  grouped[o.country] = (grouped[o.country] || 0) + 1;
+                }
+              });
+              return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+            })()}
+            title="Orders by Country"
+            dataKey="value"
+            nameKey="name"
+          />
+
+          {/* Payment Method Distribution */}
+          <PieChart
+            data={(() => {
+              const grouped: Record<string, number> = {};
+              mappedOrders.forEach(o => {
+                if (o.paymentMethod && o.paymentMethod !== '-') {
+                  grouped[o.paymentMethod] = (grouped[o.paymentMethod] || 0) + 1;
+                }
+              });
+              return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+            })()}
+            title="Payment Method Distribution"
+            dataKey="value"
+            nameKey="name"
+          />
+
+          {/* Upsell Rate Over Time */}
+          <BarChart
+            data={(() => {
+              // Group by date
+              const grouped: Record<string, { total: number; upsell: number }> = {};
+              mappedOrders.forEach(o => {
+                if (o.date && o.date !== '-') {
+                  if (!grouped[o.date]) grouped[o.date] = { total: 0, upsell: 0 };
+                  grouped[o.date].total += 1;
+                  if (o.upsell === 'Yes') grouped[o.date].upsell += 1;
+                }
+              });
+              return Object.entries(grouped).map(([date, { total, upsell }]) => ({
+                date,
+                rate: total > 0 ? (upsell / total) * 100 : 0
+              }));
+            })()}
+            title="Upsell Rate Over Time"
+            dataKey="rate"
+            xAxisDataKey="date"
+            yAxisFormatter={(v: number) => `${v.toFixed(1)}%`}
+          />
+
+          {/* Attributed vs. Unattributed Orders */}
+          <PieChart
+            data={(() => {
+              let attributed = 0, unattributed = 0;
+              mappedOrders.forEach(o => {
+                if (o.attributedPlatform && o.attributedPlatform !== '-') attributed += 1;
+                else unattributed += 1;
+              });
+              return [
+                { name: 'Attributed', value: attributed },
+                { name: 'Unattributed', value: unattributed }
+              ];
+            })()}
+            title="Attributed vs. Unattributed Orders"
+            dataKey="value"
+            nameKey="name"
+          />
 
           <Card className="w-full">
             <CardHeader className="pb-3">
@@ -438,17 +639,19 @@ export default function CheckoutChampPlatformPage() {
                   const platformRevenue = platformOrders.reduce((sum, o) => sum + (o.usdAmount || 0), 0);
                   const platformSpend = platformOrders.reduce((sum, o) => sum + (o.attributedSpend || 0), 0);
                   const platformROAS = platformSpend > 0 ? (platformRevenue / platformSpend) : 0;
-                  
                   return (
-                    <div key={platform} className="p-4 border rounded-lg">
-                      <div className="font-semibold text-sm mb-2">{platform}</div>
-                      <div className="space-y-1 text-xs">
-                        <div>Orders: {platformOrders.length}</div>
-                        <div>Revenue: {formatCurrency(platformRevenue)}</div>
-                        <div>Spend: {formatCurrency(platformSpend)}</div>
-                        <div>ROAS: {platformROAS > 0 ? `${(platformROAS * 100).toFixed(1)}%` : 'N/A'}</div>
-                      </div>
-                    </div>
+                    <Card key={platform} className="p-4 border rounded-lg shadow-sm bg-card">
+                      <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                        <BarChart3 className="w-4 h-4 text-blue-400" />
+                        <CardTitle className="text-sm font-semibold">{platform}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1 px-0 pt-0 pb-0">
+                        <div className="flex justify-between text-xs"><span>Orders</span><span className="font-semibold">{platformOrders.length}</span></div>
+                        <div className="flex justify-between text-xs"><span>Order Revenue</span><span className={platformRevenue > 0 ? "text-green-500 font-semibold" : ""}>{formatCurrency(platformRevenue)}</span></div>
+                        <div className="flex justify-between text-xs"><span>Spend</span><span className={platformSpend > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(platformSpend)}</span></div>
+                        <div className="flex justify-between text-xs"><span>ROAS</span><span className={platformROAS > 1 ? "text-green-500 font-semibold" : platformROAS < 1 ? "text-red-500 font-semibold" : "font-semibold"}>{platformSpend > 0 ? platformROAS.toFixed(2) + "x" : "N/A"}</span></div>
+                      </CardContent>
+                    </Card>
                   );
                 })}
                 {uniquePlatforms.length === 0 && (
@@ -480,7 +683,7 @@ export default function CheckoutChampPlatformPage() {
                         <div key={source} className="text-xs p-2 bg-muted rounded">
                           <div className="font-medium">{source}</div>
                           <div>Orders: {sourceOrders.length}</div>
-                          <div>Revenue: {formatCurrency(sourceRevenue)}</div>
+                          <div>Order Revenue: {formatCurrency(sourceRevenue)}</div>
                         </div>
                       );
                     })}
@@ -496,7 +699,7 @@ export default function CheckoutChampPlatformPage() {
                         <div key={medium} className="text-xs p-2 bg-muted rounded">
                           <div className="font-medium">{medium}</div>
                           <div>Orders: {mediumOrders.length}</div>
-                          <div>Revenue: {formatCurrency(mediumRevenue)}</div>
+                          <div>Order Revenue: {formatCurrency(mediumRevenue)}</div>
                         </div>
                       );
                     })}
@@ -512,7 +715,7 @@ export default function CheckoutChampPlatformPage() {
                         <div key={campaign} className="text-xs p-2 bg-muted rounded">
                           <div className="font-medium">{campaign}</div>
                           <div>Orders: {campaignOrders.length}</div>
-                          <div>Revenue: {formatCurrency(campaignRevenue)}</div>
+                          <div>Order Revenue: {formatCurrency(campaignRevenue)}</div>
                         </div>
                       );
                     })}

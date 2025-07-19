@@ -206,7 +206,7 @@ export default function PlatformsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+    <div>
           <h1 className="text-3xl font-bold tracking-tight">Platforms Overview</h1>
           <p className="text-muted-foreground">
             Compare performance across all advertising platforms

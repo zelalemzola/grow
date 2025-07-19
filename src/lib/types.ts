@@ -13,6 +13,8 @@ export interface Order {
   upsell: boolean;
   country?: string;
   brand?: string;
+  items?: Record<string, any>; // <-- Added for COGS calculation
+  shippingCost?: number; // <-- Added for OPEX calculation
 }
 
 export interface AdSpendEntry {
@@ -39,6 +41,7 @@ export interface AdSpendEntry {
 
 export interface SKUCost {
   sku: string;
+  productId?: string; // <-- Added for COGS calculation
   unitCogs: number;
   shippingCost: number;
   handlingFee: number;
@@ -126,6 +129,7 @@ export interface KPICalculation {
   aov: number;
   totalOrders: number;
   uniqueCustomers: number;
+  averageCogs: number;
 }
 
 // Filter Types

@@ -18,7 +18,8 @@ export const calculateKPIs = (
   orders: Order[],
   adSpend: AdSpendEntry[],
   skuCosts: SKUCost[],
-  fixedExpenses: FixedExpense[]
+  fixedExpenses: FixedExpense[],
+  eurToUsdRate: number = 1.10 // Default fallback rate
 ): KPICalculation => {
   // Basic calculations
   const grossRevenue = orders.reduce((sum, order) => sum + order.usdAmount, 0);
@@ -32,34 +33,102 @@ export const calculateKPIs = (
   const chargebackRate = totalOrders > 0 ? (chargebackTotal / grossRevenue) * 100 : 0;
   const netRevenue = grossRevenue - refundTotal - chargebackTotal;
 
-  // COGS calculation
-  const cogs = orders.reduce((sum, order) => {
-    const skuCost = skuCosts.find(cost => cost.sku === order.sku);
-    if (skuCost) {
-      return sum + (skuCost.unitCogs * order.quantity) + skuCost.shippingCost + skuCost.handlingFee;
-    }
-    return sum + (order.usdAmount * 0.3); // Fallback: assume 30% COGS
-  }, 0);
+  // COGS calculation (robust matching by SKU or productId) with EUR to USD conversion
+  let cogs = 0;
+  orders.forEach(order => {
+    if (!order.items) return;
+    Object.values(order.items).forEach((item: any) => {
+      console.log('[COGS] Order Item:', {
+        productSku: item.productSku,
+        productId: item.productId,
+        qty: item.qty,
+      });
+      const itemSku = (item.productSku || '').trim().toUpperCase();
+      const itemProductId = (item.productId || '').toString().trim();
+      const itemQty = Number(item.qty) || 0;
+      // Try to match by SKU first, then by productId
+      const skuCost = skuCosts.find(cost =>
+        (cost.sku && cost.sku.trim().toUpperCase() === itemSku) ||
+        (cost.productId && cost.productId.toString().trim() === itemProductId)
+      );
+      let orderCogs = 0;
+      if (skuCost) {
+        // Convert EUR costs to USD using the conversion rate
+        const unitCogsUSD = skuCost.unitCogs * eurToUsdRate;
+        const shippingCostUSD = skuCost.shippingCost * eurToUsdRate;
+        const handlingFeeUSD = (skuCost.handlingFee || 0) * eurToUsdRate;
+        orderCogs = (unitCogsUSD * itemQty) + shippingCostUSD + handlingFeeUSD;
+        cogs += orderCogs;
+      }
+      // Log details for each item
+      console.log('[COGS] Order:', {
+        orderId: order.orderId,
+        itemSku,
+        itemProductId,
+        itemQty,
+        unitCogsEUR: skuCost ? skuCost.unitCogs : undefined,
+        unitCogsUSD: skuCost ? skuCost.unitCogs * eurToUsdRate : undefined,
+        shippingCostEUR: skuCost ? skuCost.shippingCost : undefined,
+        shippingCostUSD: skuCost ? skuCost.shippingCost * eurToUsdRate : undefined,
+        handlingFeeEUR: skuCost ? skuCost.handlingFee : undefined,
+        handlingFeeUSD: skuCost ? (skuCost.handlingFee || 0) * eurToUsdRate : undefined,
+        orderCogs,
+        eurToUsdRate,
+      });
+    });
+  });
+  console.log('[COGS] Total COGS:', cogs);
 
   // Marketing spend
   const marketingSpend = adSpend.reduce((sum, entry) => sum + entry.spend, 0);
 
-  // Fixed expenses (OPEX)
-  const opex = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-
-  // Payment fees
+  // Comprehensive OPEX calculation
+  // 1. Payment processing fees (2.9% of order amounts)
   const paymentFees = orders.reduce((sum, order) => {
     return sum + (order.usdAmount * PAYMENT_FEE_PERCENTAGE);
   }, 0);
 
+  // 2. Shipping costs from orders and items
+  let totalShippingCosts = 0;
+  orders.forEach(order => {
+    // Order-level shipping cost
+    if (order.shippingCost) {
+      totalShippingCosts += Number(order.shippingCost) * eurToUsdRate;
+    }
+    // Item-level shipping costs
+    if (order.items) {
+      Object.values(order.items).forEach((item: any) => {
+        if (item.shipping) {
+          totalShippingCosts += Number(item.shipping) * eurToUsdRate;
+        }
+      });
+    }
+  });
+
+  // 3. Manual fixed expenses
+  const manualFixedExpenses = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  // 4. Total OPEX
+  const opex = paymentFees + totalShippingCosts + marketingSpend + manualFixedExpenses;
+
+  // Log OPEX breakdown
+  console.log('[OPEX] Breakdown:', {
+    paymentFees,
+    totalShippingCosts,
+    marketingSpend,
+    manualFixedExpenses,
+    totalOpex: opex,
+  });
+
   // Net profit
-  const netProfit = netRevenue - cogs - marketingSpend - opex - paymentFees;
+  const netProfit = netRevenue - cogs - opex;
 
   // Additional KPIs
   const roas = marketingSpend > 0 ? grossRevenue / marketingSpend : 0;
   const costPerCustomer = uniqueCustomers > 0 ? marketingSpend / uniqueCustomers : 0;
   const upsellRate = totalOrders > 0 ? (orders.filter(order => order.upsell).length / totalOrders) * 100 : 0;
   const aov = totalOrders > 0 ? grossRevenue / totalOrders : 0;
+  const averageCogs = totalOrders > 0 ? cogs / totalOrders : 0;
 
   return {
     grossRevenue,
@@ -79,6 +148,7 @@ export const calculateKPIs = (
     aov,
     totalOrders,
     uniqueCustomers,
+    averageCogs,
   };
 };
 
@@ -192,6 +262,7 @@ export const generateChartData = (
   });
 
   adSpend.forEach(entry => {
+    if(!entry.date) return;
     const existing = spendByDate.get(entry.date) || 0;
     spendByDate.set(entry.date, existing + entry.spend);
   });
@@ -241,12 +312,14 @@ export function filterData<T extends { date?: string; brand?: string; sku?: stri
     if (filters.dateRange.from || filters.dateRange.to) {
       if (item.date) {
         const itemDate = new Date(item.date);
-        if (filters.dateRange.from && itemDate < new Date(filters.dateRange.from)) {
+        if (typeof filters.dateRange.from === 'string' && itemDate < new Date(filters.dateRange.from)) {
           return false;
         }
-        if (filters.dateRange.to && itemDate > new Date(filters.dateRange.to)) {
+        if (typeof filters.dateRange.to === 'string' && itemDate > new Date(filters.dateRange.to)) {
           return false;
         }
+      } else {
+        // If item.date is undefined, skip date filtering for this item
       }
     }
 
@@ -290,12 +363,16 @@ export function filterAdSpendData(
   return data.filter(item => {
     // Date range filter
     if (filters.dateRange.from || filters.dateRange.to) {
-      const itemDate = new Date(item.date);
-      if (filters.dateRange.from && itemDate < new Date(filters.dateRange.from)) {
-        return false;
-      }
-      if (filters.dateRange.to && itemDate > new Date(filters.dateRange.to)) {
-        return false;
+      if (item.date) {
+        const itemDate = new Date(item.date);
+        if (typeof filters.dateRange.from === 'string' && itemDate < new Date(filters.dateRange.from)) {
+          return false;
+        }
+        if (typeof filters.dateRange.to === 'string' && itemDate > new Date(filters.dateRange.to)) {
+          return false;
+        }
+      } else {
+        // If item.date is undefined, skip date filtering for this item
       }
     }
 
