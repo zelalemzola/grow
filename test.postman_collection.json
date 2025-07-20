@@ -1,0 +1,494 @@
+{
+	"info": {
+		"_postman_id": "a3316fed-6e6f-4f25-8a99-197efe93977a",
+		"name": "test",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "42794888"
+	},
+	"item": [
+		{
+			"name": "Transaction Report for report type campaign",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "https://api.checkoutchamp.com/transactions/summary/?loginId={{CHECKOUT_CHAMP_USERNAME}}&password={{CHECKOUT_CHAMP_PASSWORD}}&startDate=01/01/2024&endDate=07/20/2025&reportType=campaign",
+					"protocol": "https",
+					"host": [
+						"api",
+						"checkoutchamp",
+						"com"
+					],
+					"path": [
+						"transactions",
+						"summary",
+						""
+					],
+					"query": [
+						{
+							"key": "loginId",
+							"value": "{{CHECKOUT_CHAMP_USERNAME}}"
+						},
+						{
+							"key": "password",
+							"value": "{{CHECKOUT_CHAMP_PASSWORD}}"
+						},
+						{
+							"key": "startDate",
+							"value": "01/01/2024"
+						},
+						{
+							"key": "endDate",
+							"value": "07/20/2025"
+						},
+						{
+							"key": "reportType",
+							"value": "campaign"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"result": "SUCCESS",
+					"message": [
+						{
+							"newSaleCnt": 7675,
+							"declinesCnt": 537,
+							"totalDeclinePerc": "0.07",
+							"approvedPerc": "93.46",
+							"newSaleRev": "312086.11",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 54,
+							"refundRev": "-1706.58",
+							"expenses": "0.00",
+							"chargebackCnt": 21,
+							"chargebackRev": "-536.37",
+							"chargebackPerc": "0.27",
+							"grossRevenue": "312086.11",
+							"netRevenue": "309843.16",
+							"currencySymbol": "€",
+							"id": 1,
+							"refundPerc": "0.55",
+							"campaign": "Bequemplus-De"
+						},
+						{
+							"newSaleCnt": 57,
+							"declinesCnt": 18,
+							"totalDeclinePerc": "0.24",
+							"approvedPerc": "76.00",
+							"newSaleRev": "2379.43",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "2379.43",
+							"netRevenue": "2379.43",
+							"currencySymbol": "$",
+							"id": 5,
+							"refundPerc": "0.00",
+							"campaign": "Bequemplus-US"
+						},
+						{
+							"newSaleCnt": 3,
+							"declinesCnt": 0,
+							"totalDeclinePerc": "0.00",
+							"approvedPerc": "100.00",
+							"newSaleRev": "209.97",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 1,
+							"chargebackRev": "-50.00",
+							"chargebackPerc": "33.33",
+							"grossRevenue": "209.97",
+							"netRevenue": "159.97",
+							"currencySymbol": "CA$",
+							"id": 10,
+							"refundPerc": "0.00",
+							"campaign": "Bequemplus-Canda"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "transaction report for report type products",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://api.checkoutchamp.com/transactions/summary/?loginId={{CHECKOUT_CHAMP_USERNAME}}&password={{CHECKOUT_CHAMP_PASSWORD}}&startDate=01/01/2024&endDate=07/20/2025&reportType=product",
+					"protocol": "https",
+					"host": [
+						"api",
+						"checkoutchamp",
+						"com"
+					],
+					"path": [
+						"transactions",
+						"summary",
+						""
+					],
+					"query": [
+						{
+							"key": "loginId",
+							"value": "{{CHECKOUT_CHAMP_USERNAME}}"
+						},
+						{
+							"key": "password",
+							"value": "{{CHECKOUT_CHAMP_PASSWORD}}"
+						},
+						{
+							"key": "startDate",
+							"value": "01/01/2024"
+						},
+						{
+							"key": "endDate",
+							"value": "07/20/2025"
+						},
+						{
+							"key": "reportType",
+							"value": "product"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"result": "SUCCESS",
+					"message": [
+						{
+							"newSaleCnt": 4994,
+							"declinesCnt": 521,
+							"totalDeclinePerc": "0.09",
+							"approvedPerc": "90.55",
+							"newSaleRev": "272810.06",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 45,
+							"refundRev": "-1571.69",
+							"expenses": "0.00",
+							"chargebackCnt": 18,
+							"chargebackRev": "-498.39",
+							"chargebackPerc": "0.36",
+							"grossRevenue": "272810.06",
+							"netRevenue": "270739.98",
+							"currencySymbol": "€",
+							"id": 4,
+							"sku": "BCBP2",
+							"refundPerc": "0.58",
+							"product": "Bequemplus™ Premium Ballenzehenkorrektur"
+						},
+						{
+							"newSaleCnt": 3,
+							"declinesCnt": 9,
+							"totalDeclinePerc": "0.75",
+							"approvedPerc": "25.00",
+							"newSaleRev": "29.97",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "29.97",
+							"netRevenue": "29.97",
+							"currencySymbol": "€",
+							"id": 5,
+							"sku": "pre-upsell2",
+							"refundPerc": "0.00",
+							"product": "Kostenloser Ersatz bei Beschädigung"
+						},
+						{
+							"newSaleCnt": 2097,
+							"declinesCnt": 10,
+							"totalDeclinePerc": "0.00",
+							"approvedPerc": "99.53",
+							"newSaleRev": "31349.03",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 8,
+							"refundRev": "-96.42",
+							"expenses": "0.00",
+							"chargebackCnt": 3,
+							"chargebackRev": "-37.98",
+							"chargebackPerc": "0.14",
+							"grossRevenue": "31349.03",
+							"netRevenue": "31214.63",
+							"currencySymbol": "€",
+							"id": 7,
+							"sku": "upsell1",
+							"refundPerc": "0.31",
+							"product": "Hallux Valgus Korrektor für die Nacht"
+						},
+						{
+							"newSaleCnt": 448,
+							"declinesCnt": 4,
+							"totalDeclinePerc": "0.01",
+							"approvedPerc": "99.12",
+							"newSaleRev": "6730.51",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 3,
+							"refundRev": "-31.47",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "6730.51",
+							"netRevenue": "6699.04",
+							"currencySymbol": "€",
+							"id": 9,
+							"sku": "ups-insoles",
+							"refundPerc": "0.47",
+							"product": "Einlagen Pro"
+						},
+						{
+							"newSaleCnt": 146,
+							"declinesCnt": 3,
+							"totalDeclinePerc": "0.02",
+							"approvedPerc": "97.99",
+							"newSaleRev": "1166.54",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 1,
+							"refundRev": "-7.00",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "1166.54",
+							"netRevenue": "1159.54",
+							"currencySymbol": "€",
+							"id": 10,
+							"sku": "50%-upsell1",
+							"refundPerc": "0.60",
+							"product": "50 % Hallux Valgus Korrektor für die Nacht"
+						},
+						{
+							"newSaleCnt": 7,
+							"declinesCnt": 4,
+							"totalDeclinePerc": "0.36",
+							"approvedPerc": "63.64",
+							"newSaleRev": "279.93",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "279.93",
+							"netRevenue": "279.93",
+							"currencySymbol": "$",
+							"id": 13,
+							"sku": "BCBP",
+							"refundPerc": "0.00",
+							"product": "Bequemplus™ Premium Bunion Corrector"
+						},
+						{
+							"newSaleCnt": 32,
+							"declinesCnt": 11,
+							"totalDeclinePerc": "0.26",
+							"approvedPerc": "74.42",
+							"newSaleRev": "1989.68",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 1,
+							"chargebackRev": "-50.00",
+							"chargebackPerc": "3.13",
+							"grossRevenue": "1989.68",
+							"netRevenue": "1939.68",
+							"currencySymbol": "$",
+							"id": 15,
+							"sku": "BCBP2",
+							"refundPerc": "0.00",
+							"product": "2x Bequemplus™ Premium Bunion Corrector"
+						},
+						{
+							"newSaleCnt": 17,
+							"declinesCnt": 3,
+							"totalDeclinePerc": "0.15",
+							"approvedPerc": "85.00",
+							"newSaleRev": "259.83",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "259.83",
+							"netRevenue": "259.83",
+							"currencySymbol": "$",
+							"id": 16,
+							"sku": "upsell1",
+							"refundPerc": "0.00",
+							"product": "Night Hallux Valgus corrector"
+						},
+						{
+							"newSaleCnt": 4,
+							"declinesCnt": 0,
+							"totalDeclinePerc": "0.00",
+							"approvedPerc": "100.00",
+							"newSaleRev": "59.96",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 0,
+							"refundRev": "0.00",
+							"expenses": "0.00",
+							"chargebackCnt": 0,
+							"chargebackRev": "0.00",
+							"chargebackPerc": "0.00",
+							"grossRevenue": "59.96",
+							"netRevenue": "59.96",
+							"currencySymbol": "$",
+							"id": 19,
+							"sku": "ups-insoles",
+							"refundPerc": "0.00",
+							"product": "Insoles Pro"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "transaction repor for report type source",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://api.checkoutchamp.com/transactions/summary/?loginId={{CHECKOUT_CHAMP_USERNAME}}&password={{CHECKOUT_CHAMP_PASSWORD}}&startDate=01/01/2024&endDate=07/20/2025&reportType=source",
+					"protocol": "https",
+					"host": [
+						"api",
+						"checkoutchamp",
+						"com"
+					],
+					"path": [
+						"transactions",
+						"summary",
+						""
+					],
+					"query": [
+						{
+							"key": "loginId",
+							"value": "{{CHECKOUT_CHAMP_USERNAME}}"
+						},
+						{
+							"key": "password",
+							"value": "{{CHECKOUT_CHAMP_PASSWORD}}"
+						},
+						{
+							"key": "startDate",
+							"value": "01/01/2024"
+						},
+						{
+							"key": "endDate",
+							"value": "07/20/2025"
+						},
+						{
+							"key": "reportType",
+							"value": "source"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"result": "SUCCESS",
+					"message": [
+						{
+							"newSaleCnt": 7735,
+							"declinesCnt": 555,
+							"totalDeclinePerc": "0.07",
+							"approvedPerc": "93.31",
+							"newSaleRev": "314675.51",
+							"rebillCnt": 0,
+							"rebillDeclinesCnt": 0,
+							"rebillApprovedPerc": "0.00",
+							"rebillRev": "0.00",
+							"salesTax": "0.00",
+							"surcharge": "0.00",
+							"refundCnt": 54,
+							"refundRev": "-1706.58",
+							"expenses": "0.00",
+							"chargebackCnt": 22,
+							"chargebackRev": "-586.37",
+							"chargebackPerc": "0.28",
+							"grossRevenue": "314675.51",
+							"netRevenue": "312382.56",
+							"currencySymbol": "€",
+							"id": null,
+							"refundPerc": "0.54",
+							"source": "No Source"
+						}
+					]
+				}
+			]
+		}
+	]
+}

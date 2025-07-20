@@ -327,9 +327,15 @@ export default function CheckoutChampPlatformPage() {
     // Get raw values
     const rawTotal = o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : (o.price !== undefined && o.price !== null ? Number(o.price) : 0);
     const rawUsdAmount = o.usdAmount !== undefined && o.usdAmount !== null ? Number(o.usdAmount) : (o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : 0);
+    const rawRefund = o.refund !== undefined && o.refund !== null ? Number(o.refund) : 0;
+    const rawChargeback = o.chargeback !== undefined && o.chargeback !== null ? Number(o.chargeback) : 0;
+    const rawAttributedSpend = o.attributedSpend !== undefined && o.attributedSpend !== null ? Number(o.attributedSpend) : 0;
     // Convert if needed
     const total = isEUR ? rawTotal * EUR_TO_USD : rawTotal;
     const usdAmount = isEUR ? rawUsdAmount * EUR_TO_USD : rawUsdAmount;
+    const refund = isEUR ? rawRefund * EUR_TO_USD : rawRefund;
+    const chargeback = isEUR ? rawChargeback * EUR_TO_USD : rawChargeback;
+    const attributedSpend = isEUR ? rawAttributedSpend * EUR_TO_USD : rawAttributedSpend;
     return {
       orderId: o.orderId || o.clientOrderId || '-',
       date: o.dateCreated || '-',
@@ -338,17 +344,16 @@ export default function CheckoutChampPlatformPage() {
       total,
       usdAmount,
       paymentMethod: o.paymentMethod || o.paySource || '-',
-      refund: o.refund || 0,
-      chargeback: o.chargeback || 0,
+      refund,
+      chargeback,
       upsell: upsell ? 'Yes' : 'No',
       country: o.country || o.shipCountry || '-',
       brand: o.campaignName || o.campaignCategoryName || '-',
-      // Attribution data
       utmSource: o.utmSource || '-',
       utmMedium: o.utmMedium || '-',
       utmCampaign: o.utmCampaign || '-',
       attributedPlatform: o.attributedPlatform || '-',
-      attributedSpend: o.attributedSpend || 0,
+      attributedSpend,
       roas: o.roas ? `${(o.roas * 100).toFixed(2)}%` : '-',
     };
   });
@@ -392,6 +397,129 @@ export default function CheckoutChampPlatformPage() {
   })) as Order[];
   const totalCOGS = calculateCOGS(ordersForCOGS);
   const averageCOGS = totalOrders > 0 ? totalCOGS / totalOrders : 0;
+
+  // Fetch Checkout Champ summary data (campaign-level)
+  const { data: ccSummaryData, isLoading: ccSummaryLoading } = useQuery<any>({
+    queryKey: ["checkoutchamp-summary", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=campaign`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      // The summary endpoint returns { result, message: [...] }
+      if (data && Array.isArray(data.message)) return data.message;
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+
+  // Compute Checkout Champ KPIs from summary
+  const ccSummary = Array.isArray(ccSummaryData) ? ccSummaryData : [];
+  const ccGrossRevenue = ccSummary.reduce((sum, row) => sum + (parseFloat(row.grossRevenue) || 0), 0);
+  const ccNetRevenue = ccSummary.reduce((sum, row) => sum + (parseFloat(row.netRevenue) || 0), 0);
+  const ccRefunds = ccSummary.reduce((sum, row) => sum + (parseFloat(row.refundRev) || 0), 0);
+  const ccChargebacks = ccSummary.reduce((sum, row) => sum + (parseFloat(row.chargebackRev) || 0), 0);
+  const ccOrders = ccSummary.reduce((sum, row) => sum + (parseInt(row.newSaleCnt) || 0), 0);
+  const ccCurrency = ccSummary[0]?.currencySymbol || '$';
+
+  const isEUR = ccCurrency === '€';
+  const ccGrossRevenueUSD = isEUR ? ccGrossRevenue * eurToUsdRate : ccGrossRevenue;
+  const ccNetRevenueUSD = isEUR ? ccNetRevenue * eurToUsdRate : ccNetRevenue;
+  const ccRefundsUSD = isEUR ? ccRefunds * eurToUsdRate : ccRefunds;
+  const ccChargebacksUSD = isEUR ? ccChargebacks * eurToUsdRate : ccChargebacks;
+  const ccOrdersUSD = ccOrders;
+
+  // Fetch Checkout Champ summary data (product-level)
+  const { data: ccProductSummaryData, isLoading: ccProductSummaryLoading } = useQuery<any>({
+    queryKey: ["checkoutchamp-product-summary", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=product`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (data && Array.isArray(data.message)) return data.message;
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+
+  const ccProductSummary = Array.isArray(ccProductSummaryData) ? ccProductSummaryData : [];
+
+  // Fetch Checkout Champ summary data (campaign-level breakdown)
+  const { data: ccCampaignSummaryData, isLoading: ccCampaignSummaryLoading } = useQuery<any>({
+    queryKey: ["checkoutchamp-campaign-summary", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=campaign`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (data && Array.isArray(data.message)) return data.message;
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+  const ccCampaignSummary = Array.isArray(ccCampaignSummaryData) ? ccCampaignSummaryData : [];
+
+  // Fetch Checkout Champ summary data (source-level breakdown)
+  const { data: ccSourceSummaryData, isLoading: ccSourceSummaryLoading } = useQuery<any>({
+    queryKey: ["checkoutchamp-source-summary", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=source`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (data && Array.isArray(data.message)) return data.message;
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+  const ccSourceSummary = Array.isArray(ccSourceSummaryData) ? ccSourceSummaryData : [];
+
+  // Only declare these once, at the top-level scope:
+  const productColumns = [
+    { key: 'sku', label: 'SKU', visible: true },
+    { key: 'product', label: 'Product', visible: true },
+    { key: 'newSaleCnt', label: 'Orders', visible: true },
+    { key: 'grossRevenue', label: 'Gross Revenue', visible: true },
+    { key: 'refundRev', label: 'Refunds', visible: true },
+    { key: 'chargebackRev', label: 'Chargebacks', visible: true },
+    { key: 'netRevenue', label: 'Net Revenue', visible: true },
+  ];
+  const campaignColumns = [
+    { key: 'campaign', label: 'Campaign', visible: true },
+    { key: 'newSaleCnt', label: 'Orders', visible: true },
+    { key: 'grossRevenue', label: 'Gross Revenue', visible: true },
+    { key: 'refundRev', label: 'Refunds', visible: true },
+    { key: 'chargebackRev', label: 'Chargebacks', visible: true },
+    { key: 'netRevenue', label: 'Net Revenue', visible: true },
+  ];
+  const sourceColumns = [
+    { key: 'source', label: 'Source', visible: true },
+    { key: 'newSaleCnt', label: 'Orders', visible: true },
+    { key: 'grossRevenue', label: 'Gross Revenue', visible: true },
+    { key: 'refundRev', label: 'Refunds', visible: true },
+    { key: 'chargebackRev', label: 'Chargebacks', visible: true },
+    { key: 'netRevenue', label: 'Net Revenue', visible: true },
+  ];
+
+  // Preprocess summary data for display
+  const processedProductSummary = ccProductSummary.map((row: any) => ({
+    ...row,
+    grossRevenue: formatCurrency(Number(row.grossRevenue)),
+    refundRev: formatCurrency(Number(row.refundRev)),
+    chargebackRev: formatCurrency(Number(row.chargebackRev)),
+    netRevenue: formatCurrency(Number(row.netRevenue)),
+  }));
+  const processedCampaignSummary = ccCampaignSummary.map((row: any) => ({
+    ...row,
+    grossRevenue: formatCurrency(Number(row.grossRevenue)),
+    refundRev: formatCurrency(Number(row.refundRev)),
+    chargebackRev: formatCurrency(Number(row.chargebackRev)),
+    netRevenue: formatCurrency(Number(row.netRevenue)),
+  }));
+  const processedSourceSummary = ccSourceSummary.map((row: any) => ({
+    ...row,
+    grossRevenue: formatCurrency(Number(row.grossRevenue)),
+    refundRev: formatCurrency(Number(row.refundRev)),
+    chargebackRev: formatCurrency(Number(row.chargebackRev)),
+    netRevenue: formatCurrency(Number(row.netRevenue)),
+  }));
 
   // DataTable columns
   const columns = [
@@ -481,10 +609,11 @@ export default function CheckoutChampPlatformPage() {
                 <CardTitle className="text-base">Revenue & Orders</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
-                <div className="flex justify-between"><span>Total Order Revenue</span><span className={"font-semibold " + (totalRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(totalRevenue)}</span></div>
+                <div className="flex justify-between"><span>Total Order Revenue</span><span className={"font-semibold " + (ccGrossRevenueUSD > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(ccGrossRevenueUSD)}</span></div>
+                <div className="flex justify-between"><span>Net Revenue</span><span>{formatCurrency(ccNetRevenueUSD)}</span></div>
                 <Separator className="my-2" />
-                <div className="flex justify-between"><span>Total Orders</span><span>{formatNumber(totalOrders)}</span></div>
-                <div className="flex justify-between"><span>Upsell Orders</span><span className={totalUpsells > 0 ? "text-green-500" : ""}>{formatNumber(totalUpsells)}</span></div>
+                <div className="flex justify-between"><span>Total Orders</span><span>{formatNumber(ccOrdersUSD)}</span></div>
+                <div className="flex justify-between"><span>Unique Customers</span><span>{formatNumber(new Set(filteredOrders.map(o => o.orderId)).size)}</span></div>
               </CardContent>
             </Card>
             {/* Refunds & Chargebacks */}
@@ -494,8 +623,8 @@ export default function CheckoutChampPlatformPage() {
                 <CardTitle className="text-base">Refunds & Chargebacks</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
-                <div className="flex justify-between"><span>Refunds</span><span className="text-red-500 font-semibold">{formatCurrency(totalRefunds)}</span></div>
-                <div className="flex justify-between"><span>Chargebacks</span><span className="text-red-500 font-semibold">{formatCurrency(totalChargebacks)}</span></div>
+                <div className="flex justify-between"><span>Refunds</span><span className="text-red-500 font-semibold">{formatCurrency(ccRefundsUSD)}</span></div>
+                <div className="flex justify-between"><span>Chargebacks</span><span className="text-red-500 font-semibold">{formatCurrency(ccChargebacksUSD)}</span></div>
               </CardContent>
             </Card>
             {/* Attribution */}
@@ -660,6 +789,52 @@ export default function CheckoutChampPlatformPage() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Product Breakdown */}
+          <Card className="w-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold flex items-center space-x-2">
+                <span>Product Breakdown</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={processedProductSummary}
+                columns={productColumns}
+                onColumnToggle={() => {}}
+              />
+            </CardContent>
+          </Card>
+          {/* Campaign Breakdown */}
+          <Card className="w-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold flex items-center space-x-2">
+                <span>Campaign Breakdown</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={processedCampaignSummary}
+                columns={campaignColumns}
+                onColumnToggle={() => {}}
+              />
+            </CardContent>
+          </Card>
+          {/* Source Breakdown */}
+          <Card className="w-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold flex items-center space-x-2">
+                <span>Source Breakdown</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={processedSourceSummary}
+                columns={sourceColumns}
+                onColumnToggle={() => {}}
+              />
             </CardContent>
           </Card>
         </TabsContent>

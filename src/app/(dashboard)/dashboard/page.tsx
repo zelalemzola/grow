@@ -75,6 +75,35 @@ export default function DashboardPage() {
   });
   const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
 
+  // Fetch Checkout Champ summary data (campaign-level)
+  const { data: ccSummaryData, isLoading: ccSummaryLoading } = useQuery<any>({
+    queryKey: ["checkoutchamp-summary", filters],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=campaign`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      // The summary endpoint returns { result, message: [...] }
+      if (data && Array.isArray(data.message)) return data.message;
+      if (Array.isArray(data)) return data;
+      return [];
+    },
+  });
+
+  // Compute Checkout Champ KPIs from summary
+  const ccSummary = Array.isArray(ccSummaryData) ? ccSummaryData : [];
+  const ccGrossRevenue = ccSummary.reduce((sum, row) => sum + (parseFloat(row.grossRevenue) || 0), 0);
+  const ccNetRevenue = ccSummary.reduce((sum, row) => sum + (parseFloat(row.netRevenue) || 0), 0);
+  const ccRefunds = ccSummary.reduce((sum, row) => sum + (parseFloat(row.refundRev) || 0), 0);
+  const ccChargebacks = ccSummary.reduce((sum, row) => sum + (parseFloat(row.chargebackRev) || 0), 0);
+  const ccOrders = ccSummary.reduce((sum, row) => sum + (parseInt(row.newSaleCnt) || 0), 0);
+  const ccCurrency = ccSummary[0]?.currencySymbol || '$';
+
+  const isEUR = ccCurrency === '€';
+  const ccGrossRevenueUSD = isEUR ? ccGrossRevenue * EUR_TO_USD : ccGrossRevenue;
+  const ccNetRevenueUSD = isEUR ? ccNetRevenue * EUR_TO_USD : ccNetRevenue;
+  const ccRefundsUSD = isEUR ? ccRefunds * EUR_TO_USD : ccRefunds;
+  const ccChargebacksUSD = isEUR ? ccChargebacks * EUR_TO_USD : ccChargebacks;
+
   // Fetch all data using React Query
   const { data: taboolaData } = useQuery<any[]>({
     queryKey: ["taboola", filters],
@@ -287,14 +316,22 @@ export default function DashboardPage() {
     return calculateKPIs(allOrders, allAdSpend, skuCosts, fixedExpenses, EUR_TO_USD);
   }, [ordersData, taboolaData, adupData, outbrainData, productsData, skuCosts, fixedExpenses, EUR_TO_USD]);
 
+  // For KPI cards, use summary endpoint for these:
+  const kpiGrossRevenue = ccGrossRevenueUSD;
+  const kpiNetRevenue = ccNetRevenueUSD;
+  const kpiRefunds = ccRefundsUSD;
+  const kpiChargebacks = ccChargebacksUSD;
+  const kpiTotalOrders = ccOrders;
+  // For Unique Customers, COGS, OPEX, etc., continue using raw orders/kpiResults as before.
+
   // Remove COGS and OPEX from KPI cards
   const kpis = kpiResults ? [
-    { key: "Gross Revenue", value: kpiResults.grossRevenue, format: "currency" },
+    { key: "Gross Revenue", value: kpiGrossRevenue, format: "currency" },
     { key: "Refund Total", value: kpiResults.refundTotal, format: "currency" },
-    { key: "Chargeback Total", value: kpiResults.chargebackTotal, format: "currency" },
+    { key: "Chargeback Total", value: kpiChargebacks, format: "currency" },
     { key: "Refund Rate", value: kpiResults.refundRate, format: "percentage" },
     { key: "Chargeback Rate", value: kpiResults.chargebackRate, format: "percentage" },
-    { key: "Net Revenue", value: kpiResults.netRevenue, format: "currency" },
+    { key: "Net Revenue", value: kpiNetRevenue, format: "currency" },
     { key: "COGS", value: kpiResults.cogs, format: "currency" }, // <-- Add COGS card
     { key: "OPEX", value: kpiResults.opex, format: "currency" }, // <-- Add OPEX card
     { key: "Marketing Spend", value: kpiResults.marketingSpend, format: "currency" },
@@ -399,11 +436,11 @@ export default function DashboardPage() {
             <CardTitle className="text-base">Revenue & Orders</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="flex justify-between"><span>Gross Revenue</span><span className={"font-semibold " + ((kpiResults?.grossRevenue ?? 0) > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiResults?.grossRevenue ?? 0)}</span></div>
-            <div className="flex justify-between"><span>Net Revenue</span><span className={((kpiResults?.netRevenue ?? 0) > 0 ? "text-green-500" : (kpiResults?.netRevenue ?? 0) < 0 ? "text-red-500" : "")}>{formatCurrency(kpiResults?.netRevenue ?? 0)}</span></div>
-            <div className="flex justify-between"><span>Marketing Spend</span><span className={((kpiResults?.marketingSpend ?? 0) > 0 ? "text-red-500" : "")}>{formatCurrency(kpiResults?.marketingSpend ?? 0)}</span></div>
+            <div className="flex justify-between"><span>Gross Revenue</span><span className={"font-semibold " + (kpiGrossRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiGrossRevenue)}</span></div>
+            <div className="flex justify-between"><span>Net Revenue</span><span className={kpiNetRevenue > 0 ? "text-green-500" : kpiNetRevenue < 0 ? "text-red-500" : ""}>{formatCurrency(kpiNetRevenue)}</span></div>
+            <div className="flex justify-between"><span>Marketing Spend</span><span className={(kpiResults?.marketingSpend ?? 0) > 0 ? "text-red-500" : ""}>{formatCurrency(kpiResults?.marketingSpend ?? 0)}</span></div>
             <Separator className="my-2" />
-            <div className="flex justify-between"><span>Total Orders</span><span>{formatNumber(kpiResults?.totalOrders ?? 0)}</span></div>
+            <div className="flex justify-between"><span>Total Orders</span><span>{formatNumber(kpiTotalOrders)}</span></div>
             <div className="flex justify-between"><span>Unique Customers</span><span>{formatNumber(kpiResults?.uniqueCustomers ?? 0)}</span></div>
           </CardContent>
         </Card>
@@ -414,11 +451,9 @@ export default function DashboardPage() {
             <CardTitle className="text-base">Refunds & Chargebacks</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="flex justify-between"><span>Refund Total</span><span className="text-red-500 font-semibold">{formatCurrency(kpiResults?.refundTotal ?? 0)}</span></div>
-            <div className="flex justify-between"><span>Refund Rate</span><span className="text-red-500 font-semibold">{formatPercentage(kpiResults?.refundRate ?? 0)}</span></div>
+            <div className="flex justify-between"><span>Refund Total</span><span className="text-red-500 font-semibold">{formatCurrency(kpiRefunds)}</span></div>
             <Separator className="my-2" />
-            <div className="flex justify-between"><span>Chargeback Total</span><span className="text-red-500 font-semibold">{formatCurrency(kpiResults?.chargebackTotal ?? 0)}</span></div>
-            <div className="flex justify-between"><span>Chargeback Rate</span><span className="text-red-500 font-semibold">{formatPercentage(kpiResults?.chargebackRate ?? 0)}</span></div>
+            <div className="flex justify-between"><span>Chargeback Total</span><span className="text-red-500 font-semibold">{formatCurrency(kpiChargebacks)}</span></div>
           </CardContent>
         </Card>
         {/* Cost Breakdown */}
@@ -504,22 +539,12 @@ export default function DashboardPage() {
                   <div className="text-xs"><span className="font-medium">Conversions:</span> {formatNumber(aggregateAdPlatform(key).conversions)}</div>
                 </div>
               ) : (
-                (() => {
-                  // Use normalized Checkout Champ orders only
-                  const checkoutChampOrders = allOrders;
-                  const totalOrders = checkoutChampOrders.length;
-                  const grossRevenue = checkoutChampOrders.reduce((sum, o) => sum + (o.usdAmount || 0), 0);
-                  const chargebacks = checkoutChampOrders.reduce((sum, o) => sum + (o.chargeback || 0), 0);
-                  const upsellOrders = checkoutChampOrders.filter(o => o.upsell).length;
-                  return (
                 <div className="grid grid-cols-2 gap-2 mb-4">
-                      <div className="text-xs"><span className="font-medium">Total Orders:</span> {formatNumber(totalOrders)}</div>
-                      <div className="text-xs"><span className="font-medium">Gross Revenue:</span> {formatCurrency(grossRevenue)}</div>
-                      <div className="text-xs"><span className="font-medium">Chargebacks:</span> {formatCurrency(chargebacks)}</div>
-                      <div className="text-xs"><span className="font-medium">Upsell Orders:</span> {formatNumber(upsellOrders)}</div>
+                  <div className="text-xs"><span className="font-medium">Total Orders:</span> {formatNumber(ccOrders)}</div>
+                  <div className="text-xs"><span className="font-medium">Gross Revenue:</span> {formatCurrency(ccGrossRevenueUSD)}</div>
+                  <div className="text-xs"><span className="font-medium">Chargebacks:</span> {formatCurrency(ccChargebacksUSD)}</div>
+                  <div className="text-xs"><span className="font-medium">Refunds:</span> {formatCurrency(ccRefundsUSD)}</div>
                 </div>
-                  );
-                })()
               )}
             </CardContent>
           </Card>

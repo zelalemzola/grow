@@ -52,14 +52,14 @@ export const calculateKPIs = (
         (cost.productId && cost.productId.toString().trim() === itemProductId)
       );
       let orderCogs = 0;
-      if (skuCost) {
+    if (skuCost) {
         // Convert EUR costs to USD using the conversion rate
         const unitCogsUSD = skuCost.unitCogs * eurToUsdRate;
         const shippingCostUSD = skuCost.shippingCost * eurToUsdRate;
         const handlingFeeUSD = (skuCost.handlingFee || 0) * eurToUsdRate;
         orderCogs = (unitCogsUSD * itemQty) + shippingCostUSD + handlingFeeUSD;
         cogs += orderCogs;
-      }
+    }
       // Log details for each item
       console.log('[COGS] Order:', {
         orderId: order.orderId,
