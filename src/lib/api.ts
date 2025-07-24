@@ -287,28 +287,41 @@ export const fetchAdUpData = async (
 export const fetchCheckoutChampOrders = async (
   filters: DashboardFilters
 ): Promise<Order[]> => {
+  // Helper to format date as MM/DD/YYYY
+  function formatDateMMDDYYYY(dateStr: string) {
+    const d = new Date(dateStr);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
+  }
   try {
-    const client = createCheckoutChampClient();
-    const startDate = new Date(filters.dateRange.from).toLocaleDateString('en-US');
-    const endDate = new Date(filters.dateRange.to).toLocaleDateString('en-US');
-    const response = await client.get('/order/query', {
-      params: {
-        loginId:process.env.CHECKOUT_CHAMP_USERNAME,
-        password:process.env.CHECKOUT_CHAMP_PASSWORD,
-        startDate,
-        endDate,
-      },
+    const loginId = process.env.CHECKOUT_CHAMP_USERNAME;
+    const password = process.env.CHECKOUT_CHAMP_PASSWORD;
+    if (!loginId || !password) {
+      throw new Error('Missing Checkout Champ credentials');
+    }
+    const startDate = formatDateMMDDYYYY(filters.dateRange.from);
+    const endDate = formatDateMMDDYYYY(filters.dateRange.to);
+    const params = new URLSearchParams({
+      loginId,
+      password,
+      startDate,
+      endDate,
     });
-
-    // Extract the orders array from the API response
-    const apiData = response.data;
+    const url = `https://api.checkoutchamp.com/order/query/?${params.toString()}`;
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Checkout Champ API error: ${text}`);
+    }
+    const apiData = await response.json();
     if (
       apiData &&
       apiData.result === "SUCCESS" &&
       apiData.message &&
       Array.isArray(apiData.message.data)
     ) {
-      // Map each order to include sku (all SKUs, comma-separated) and upsell (true if any item is an upsell)
       return apiData.message.data.map((order: any) => {
         let sku = '-';
         let upsell = false;
@@ -324,7 +337,6 @@ export const fetchCheckoutChampOrders = async (
         };
       });
     }
-    // If the API did not return a success, throw the error message if available
     throw new Error(
       apiData && apiData.message && typeof apiData.message === 'string'
         ? apiData.message
@@ -332,7 +344,6 @@ export const fetchCheckoutChampOrders = async (
     );
   } catch (error) {
     console.error('Error fetching Checkout Champ orders:', error);
-    // Throw the error so it can be handled by the API route
     throw error;
   }
 };

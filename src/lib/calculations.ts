@@ -83,9 +83,14 @@ export const calculateKPIs = (
   const marketingSpend = adSpend.reduce((sum, entry) => sum + entry.spend, 0);
 
   // Comprehensive OPEX calculation
-  // 1. Payment processing fees (2.9% of order amounts)
+  // 1. Payment processing fees (9% for PayPal, 3% for credit card)
   const paymentFees = orders.reduce((sum, order) => {
-    return sum + (order.usdAmount * PAYMENT_FEE_PERCENTAGE);
+    // Default to 3% (credit card)
+    let feeRate = 0.03;
+    if (order.paymentMethod && order.paymentMethod.toLowerCase().includes('paypal')) {
+      feeRate = 0.09;
+    }
+    return sum + (order.usdAmount * feeRate);
   }, 0);
 
   // 2. Shipping costs from orders and items

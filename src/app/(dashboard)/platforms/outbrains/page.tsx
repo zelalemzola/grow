@@ -318,7 +318,7 @@ const OutbrainsPage = () => {
   return (
     <main className="min-h-screen bg-background py-8 px-2 sm:px-6 flex flex-col items-center">
       <div className="w-full max-w-5xl space-y-6">
-        <h1 className="text-3xl font-bold mb-2 text-white flex items-center gap-2">
+        <h1 className="text-3xl font-bold mb-2 text-primary flex items-center gap-2">
           <span>Outbrain Dashboard</span>
         </h1>
         {/* KPI Cards */}

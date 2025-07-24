@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { DollarSign, AlertTriangle, Target, Users, BarChart3, Package } from "lu
 import { FilterPanel } from "@/components/dashboard/FilterPanel";
 import { DataTable } from "@/components/dashboard/DataTable";
 import { ExportButton } from "@/components/dashboard/ExportButton";
-import { DashboardFilters, Order, AdSpendEntry } from "@/lib/types";
+import { DashboardFilters, Order, AdSpendEntry, SKUCost } from "@/lib/types";
 import { formatCurrency, formatNumber } from "@/lib/calculations";
 import {
   Select,
@@ -29,6 +29,11 @@ import { AreaChart } from '@/components/dashboard/AreaChart';
 import { PieChart } from '@/components/dashboard/PieChart';
 import { BarChart } from '@/components/dashboard/BarChart';
 import { getEurToUsdRate } from '@/lib/utils';
+import { useCogsStore } from "@/lib/cogsStore";
+import { useDateRangeStore } from "@/lib/dateRangeStore";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { usePaymentFeeStore } from "@/lib/paymentFeeStore";
+import { useOpexStore } from '@/lib/opexStore';
 
 // Enhanced order type with attribution data
 interface EnhancedOrder extends Order {
@@ -45,12 +50,10 @@ interface EnhancedOrder extends Order {
 }
 
 const fetchCheckoutChampOrders = async (filters: DashboardFilters): Promise<Order[]> => {
-  // Format dates as M/D/YY for the API
-  const startDate = new Date(filters.dateRange.from).toLocaleDateString('en-US');
-  const endDate = new Date(filters.dateRange.to).toLocaleDateString('en-US');
+  // Pass ISO date strings to backend; backend will format for external API
   const params = new URLSearchParams({
-    startDate,
-    endDate,
+    startDate: filters.dateRange.from,
+    endDate: filters.dateRange.to,
   });
   const res = await fetch(`/api/checkoutchamp?${params.toString()}`);
   if (!res.ok) throw new Error("Failed to fetch orders");
@@ -215,12 +218,16 @@ const correlateOrdersWithAdSpend = (orders: Order[], adSpend: AdSpendEntry[]): E
 };
 
 export default function CheckoutChampPlatformPage() {
-  const [filters, setFilters] = useState<DashboardFilters>({
-    dateRange: {
-      from: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().slice(0, 10),
-      to: new Date().toISOString().slice(0, 10),
-    },
-  });
+  const { from, to, setDateRange, load: loadDateRange } = useDateRangeStore();
+  const { totalCogs, load } = useCogsStore();
+  const { feePercentages, setFeePercentage, loadFees, saveFee } = usePaymentFeeStore();
+  const { opex, setOpex, loadOpex, saveOpex } = useOpexStore();
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadFees();
+    loadOpex();
+  }, [loadFees, loadOpex]);
 
   // Correct useQuery usage: queryKey, queryFn, options
   // If using React Query v3, use this signature:
@@ -233,13 +240,13 @@ export default function CheckoutChampPlatformPage() {
   const eurToUsdRate: number = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
 
   const { data: ordersData, isLoading: ordersLoading, error: ordersError } = useQuery<Order[]>({
-    queryKey: ['checkoutchamp-orders', filters],
-    queryFn: () => fetchCheckoutChampOrders(filters),
+    queryKey: ['checkoutchamp-orders', { dateRange: { from, to } }],
+    queryFn: () => fetchCheckoutChampOrders({ dateRange: { from, to } }),
   });
 
   const { data: adSpendData, isLoading: adSpendLoading, error: adSpendError } = useQuery<AdSpendEntry[]>({
-    queryKey: ['ad-spend', filters],
-    queryFn: () => fetchAdSpendData(filters),
+    queryKey: ['ad-spend', { dateRange: { from, to } }],
+    queryFn: () => fetchAdSpendData({ dateRange: { from, to } }),
   });
 
   // Fetch product cost data for COGS calculation
@@ -275,34 +282,30 @@ export default function CheckoutChampPlatformPage() {
     }));
 
   // COGS calculation function
-  const calculateCOGS = (orders: Order[]) => {
+  const calculateCOGS = (orders: Order[], skuCosts: SKUCost[]) => {
     let totalCogs = 0;
     orders.forEach(order => {
       if (!order.items) return;
       Object.values(order.items).forEach((item: any) => {
-        const itemSku = (item.productSku || '').trim().toUpperCase();
-        const itemProductId = (item.productId || '').toString().trim();
-        const itemQty = Number(item.qty) || 0;
-        // Try to match by SKU first, then by productId
-        const skuCost = skuCosts.find(cost =>
-          (cost.sku && cost.sku.trim().toUpperCase() === itemSku) ||
-          (cost.productId && cost.productId.toString().trim() === itemProductId)
-        );
+        if (item.productType === 'OFFER' || item.productType === 'UPSALE') {
+          const sku = (item.productSku || '').trim().toUpperCase();
+          const skuCost = skuCosts.find(cost => cost.sku === sku);
         if (skuCost) {
-          // Convert EUR costs to USD using the conversion rate
-          const unitCogsUSD = skuCost.unitCogs * eurToUsdRate;
-          const shippingCostUSD = skuCost.shippingCost * eurToUsdRate;
-          const handlingFeeUSD = (skuCost.handlingFee || 0) * eurToUsdRate;
-          const orderCogs = (unitCogsUSD * itemQty) + shippingCostUSD + handlingFeeUSD;
-          totalCogs += orderCogs;
+            const itemCogs = skuCost.unitCogs + skuCost.shippingCost + (skuCost.handlingFee || 0);
+            totalCogs += itemCogs;
+            console.log(`[COGS] Adding SKU: ${sku}, unitCogs: ${skuCost.unitCogs}, shipping: ${skuCost.shippingCost}, handling: ${skuCost.handlingFee}, itemCogs: ${itemCogs}, runningTotal: ${totalCogs}`);
+          } else {
+            console.log(`[COGS] No cost found for SKU: ${sku}`);
+          }
         }
       });
     });
+    console.log(`[COGS] Final total COGS: ${totalCogs}`);
     return totalCogs;
   };
 
-  // Ensure data is always arrays
-  const orders = Array.isArray(ordersData) ? ordersData : [];
+  // When fetching and mapping orders, filter out partial orders
+  const orders = Array.isArray(ordersData) ? ordersData.filter((o: any) => o.orderStatus === 'COMPLETE') : [];
   const adSpend = Array.isArray(adSpendData) ? adSpendData : [];
 
   // Correlate orders with ad spend
@@ -344,6 +347,7 @@ export default function CheckoutChampPlatformPage() {
       total,
       usdAmount,
       paymentMethod: o.paymentMethod || o.paySource || '-',
+      paySource: o.paySource || o.paymentMethod || '-', // <-- Add paySource for linter fix
       refund,
       chargeback,
       upsell: upsell ? 'Yes' : 'No',
@@ -395,81 +399,109 @@ export default function CheckoutChampPlatformPage() {
     ...o,
     upsell: o.upsell === 'Yes'
   })) as Order[];
-  const totalCOGS = calculateCOGS(ordersForCOGS);
+const totalCOGS = calculateCOGS(ordersForCOGS, skuCosts);
   const averageCOGS = totalOrders > 0 ? totalCOGS / totalOrders : 0;
 
-  // Fetch Checkout Champ summary data (campaign-level)
-  const { data: ccSummaryData, isLoading: ccSummaryLoading } = useQuery<any>({
-    queryKey: ["checkoutchamp-summary", filters],
-    queryFn: async () => {
-      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=campaign`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      // The summary endpoint returns { result, message: [...] }
-      if (data && Array.isArray(data.message)) return data.message;
-      if (Array.isArray(data)) return data;
-      return [];
-    },
-  });
+  // Payment Processing Fee calculation using global store
+  const totalPaymentProcessingFees = filteredOrders.reduce((sum, o) => {
+    const paySource = (o.paySource || o.paymentMethod || '').toLowerCase();
+    // Find the best matching fee (case-insensitive, fallback to 0)
+    let feePercent = 0;
+    // Try exact match first
+    if (feePercentages[paySource] !== undefined) {
+      feePercent = feePercentages[paySource];
+    } else {
+      // Try partial match (e.g., 'paypal express' should match 'paypal')
+      const found = Object.keys(feePercentages).find(key => paySource.includes(key));
+      if (found) feePercent = feePercentages[found];
+    }
+    return sum + ((o.usdAmount || 0) * (feePercent / 100));
+  }, 0);
 
-  // Compute Checkout Champ KPIs from summary
-  const ccSummary = Array.isArray(ccSummaryData) ? ccSummaryData : [];
-  const ccGrossRevenue = ccSummary.reduce((sum, row) => sum + (parseFloat(row.grossRevenue) || 0), 0);
-  const ccNetRevenue = ccSummary.reduce((sum, row) => sum + (parseFloat(row.netRevenue) || 0), 0);
-  const ccRefunds = ccSummary.reduce((sum, row) => sum + (parseFloat(row.refundRev) || 0), 0);
-  const ccChargebacks = ccSummary.reduce((sum, row) => sum + (parseFloat(row.chargebackRev) || 0), 0);
-  const ccOrders = ccSummary.reduce((sum, row) => sum + (parseInt(row.newSaleCnt) || 0), 0);
-  const ccCurrency = ccSummary[0]?.currencySymbol || '$';
+  // Remove ccSummaryData and all summary endpoint logic
+  // Calculate all KPIs from filteredOrders (raw orders)
+  const kpiGrossRevenue = filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  // Net Revenue = Gross Revenue - Payment Fees
+  const kpiNetRevenue = kpiGrossRevenue - totalPaymentProcessingFees;
+  const kpiRefunds = filteredOrders.reduce((sum, o) => sum + (o.refund || 0), 0);
+  const kpiChargebacks = filteredOrders.reduce((sum, o) => sum + (o.chargeback || 0), 0);
+  const kpiTotalOrders = filteredOrders.length;
 
-  const isEUR = ccCurrency === '€';
-  const ccGrossRevenueUSD = isEUR ? ccGrossRevenue * eurToUsdRate : ccGrossRevenue;
-  const ccNetRevenueUSD = isEUR ? ccNetRevenue * eurToUsdRate : ccNetRevenue;
-  const ccRefundsUSD = isEUR ? ccRefunds * eurToUsdRate : ccRefunds;
-  const ccChargebacksUSD = isEUR ? ccChargebacks * eurToUsdRate : ccChargebacks;
-  const ccOrdersUSD = ccOrders;
+  // Add local breakdown calculations using useMemo
+  const productBreakdown = useMemo(() => {
+    const map: Record<string, any> = {};
+    filteredOrders.forEach(o => {
+      const skus = o.sku.split(',').map((sku: string) => sku.trim());
+      skus.forEach(sku => {
+        if (!sku) return;
+        if (!map[sku]) {
+          map[sku] = {
+            sku,
+            product: o.brand || sku,
+            newSaleCnt: 0,
+            grossRevenue: 0,
+            refundRev: 0,
+            chargebackRev: 0,
+            netRevenue: 0,
+          };
+        }
+        map[sku].newSaleCnt += 1;
+        map[sku].grossRevenue += o.usdAmount || 0;
+        map[sku].refundRev += o.refund || 0;
+        map[sku].chargebackRev += o.chargeback || 0;
+        map[sku].netRevenue = map[sku].grossRevenue - map[sku].refundRev - map[sku].chargebackRev;
+      });
+    });
+    return Object.values(map);
+  }, [filteredOrders]);
 
-  // Fetch Checkout Champ summary data (product-level)
-  const { data: ccProductSummaryData, isLoading: ccProductSummaryLoading } = useQuery<any>({
-    queryKey: ["checkoutchamp-product-summary", filters],
-    queryFn: async () => {
-      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=product`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (data && Array.isArray(data.message)) return data.message;
-      if (Array.isArray(data)) return data;
-      return [];
-    },
-  });
+  // Campaign Breakdown
+  const campaignBreakdown = useMemo(() => {
+    const map: Record<string, any> = {};
+    filteredOrders.forEach(o => {
+      const campaign = o.brand || '-';
+      if (!map[campaign]) {
+        map[campaign] = {
+          campaign,
+          newSaleCnt: 0,
+          grossRevenue: 0,
+          refundRev: 0,
+          chargebackRev: 0,
+          netRevenue: 0,
+        };
+      }
+      map[campaign].newSaleCnt += 1;
+      map[campaign].grossRevenue += o.usdAmount || 0;
+      map[campaign].refundRev += o.refund || 0;
+      map[campaign].chargebackRev += o.chargeback || 0;
+      map[campaign].netRevenue = map[campaign].grossRevenue - map[campaign].refundRev - map[campaign].chargebackRev;
+    });
+    return Object.values(map);
+  }, [filteredOrders]);
 
-  const ccProductSummary = Array.isArray(ccProductSummaryData) ? ccProductSummaryData : [];
-
-  // Fetch Checkout Champ summary data (campaign-level breakdown)
-  const { data: ccCampaignSummaryData, isLoading: ccCampaignSummaryLoading } = useQuery<any>({
-    queryKey: ["checkoutchamp-campaign-summary", filters],
-    queryFn: async () => {
-      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=campaign`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (data && Array.isArray(data.message)) return data.message;
-      if (Array.isArray(data)) return data;
-      return [];
-    },
-  });
-  const ccCampaignSummary = Array.isArray(ccCampaignSummaryData) ? ccCampaignSummaryData : [];
-
-  // Fetch Checkout Champ summary data (source-level breakdown)
-  const { data: ccSourceSummaryData, isLoading: ccSourceSummaryLoading } = useQuery<any>({
-    queryKey: ["checkoutchamp-source-summary", filters],
-    queryFn: async () => {
-      const res = await fetch(`/api/checkoutchamp/summary?startDate=${filters.dateRange.from}&endDate=${filters.dateRange.to}&reportType=source`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (data && Array.isArray(data.message)) return data.message;
-      if (Array.isArray(data)) return data;
-      return [];
-    },
-  });
-  const ccSourceSummary = Array.isArray(ccSourceSummaryData) ? ccSourceSummaryData : [];
+  // Source Breakdown
+  const sourceBreakdown = useMemo(() => {
+    const map: Record<string, any> = {};
+    filteredOrders.forEach(o => {
+      const source = o.utmSource || '-';
+      if (!map[source]) {
+        map[source] = {
+          source,
+          newSaleCnt: 0,
+          grossRevenue: 0,
+          refundRev: 0,
+          chargebackRev: 0,
+          netRevenue: 0,
+        };
+      }
+      map[source].newSaleCnt += 1;
+      map[source].grossRevenue += o.usdAmount || 0;
+      map[source].refundRev += o.refund || 0;
+      map[source].chargebackRev += o.chargeback || 0;
+      map[source].netRevenue = map[source].grossRevenue - map[source].refundRev - map[source].chargebackRev;
+    });
+    return Object.values(map);
+  }, [filteredOrders]);
 
   // Only declare these once, at the top-level scope:
   const productColumns = [
@@ -498,28 +530,12 @@ export default function CheckoutChampPlatformPage() {
     { key: 'netRevenue', label: 'Net Revenue', visible: true },
   ];
 
-  // Preprocess summary data for display
-  const processedProductSummary = ccProductSummary.map((row: any) => ({
-    ...row,
-    grossRevenue: formatCurrency(Number(row.grossRevenue)),
-    refundRev: formatCurrency(Number(row.refundRev)),
-    chargebackRev: formatCurrency(Number(row.chargebackRev)),
-    netRevenue: formatCurrency(Number(row.netRevenue)),
-  }));
-  const processedCampaignSummary = ccCampaignSummary.map((row: any) => ({
-    ...row,
-    grossRevenue: formatCurrency(Number(row.grossRevenue)),
-    refundRev: formatCurrency(Number(row.refundRev)),
-    chargebackRev: formatCurrency(Number(row.chargebackRev)),
-    netRevenue: formatCurrency(Number(row.netRevenue)),
-  }));
-  const processedSourceSummary = ccSourceSummary.map((row: any) => ({
-    ...row,
-    grossRevenue: formatCurrency(Number(row.grossRevenue)),
-    refundRev: formatCurrency(Number(row.refundRev)),
-    chargebackRev: formatCurrency(Number(row.chargebackRev)),
-    netRevenue: formatCurrency(Number(row.netRevenue)),
-  }));
+  // Remove processedProductSummary, processedCampaignSummary, processedSourceSummary
+  // Use productBreakdown, campaignBreakdown, sourceBreakdown directly in DataTable components
+  // Example:
+  // <DataTable data={productBreakdown} columns={productColumns} ... />
+  // <DataTable data={campaignBreakdown} columns={campaignColumns} ... />
+  // <DataTable data={sourceBreakdown} columns={sourceColumns} ... />
 
   // DataTable columns
   const columns = [
@@ -555,30 +571,35 @@ export default function CheckoutChampPlatformPage() {
 
   // Date range filter handler
   const handleDateRangeChange = (field: 'from' | 'to', value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      dateRange: {
-        ...prev.dateRange,
-        [field]: value,
-      },
-    }));
+    setDateRange(value, value);
   };
 
   // Reset filters
   const handleResetFilters = () => {
-    setFilters({
-      dateRange: {
-        from: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().slice(0, 10),
-        to: new Date().toISOString().slice(0, 10),
-      },
-    });
+    setDateRange(new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10));
     setSkuFilter("__ALL__");
     setPaymentMethodFilter("__ALL__");
     setPlatformFilter("__ALL__");
   };
 
+  useEffect(() => { loadDateRange(); }, [loadDateRange]);
+
   const isLoading = ordersLoading || adSpendLoading;
   const error = ordersError || adSpendError;
+
+  // Dialog state for payment processing fee breakdown
+  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+
+  // Unique payment methods and their order counts
+  const paymentMethodCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredOrders.forEach((o) => {
+      const method = (o.paySource || o.paymentMethod || '-').toString();
+      if (!counts[method]) counts[method] = 0;
+      counts[method] += 1;
+    });
+    return Object.entries(counts).map(([method, count]) => ({ method, count }));
+  }, [filteredOrders]);
 
   return (
     <div className="container-responsive space-y-6">
@@ -600,69 +621,133 @@ export default function CheckoutChampPlatformPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* KPI Cards - Modern Grouped Layout */}
+          {/* KPI Cards - Each KPI in its own card */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6 my-6">
-            {/* Revenue & Orders */}
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <DollarSign className="w-5 h-5 text-yellow-300" />
-                <CardTitle className="text-base">Revenue & Orders</CardTitle>
+                <CardTitle className="text-base">Total Order Revenue</CardTitle>
+            </CardHeader>
+              <CardContent>
+                <span className={"font-semibold " + (kpiGrossRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiGrossRevenue)}</span>
+            </CardContent>
+          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <DollarSign className="w-5 h-5 text-yellow-300" />
+                <CardTitle className="text-base">Net Revenue</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1">
-                <div className="flex justify-between"><span>Total Order Revenue</span><span className={"font-semibold " + (ccGrossRevenueUSD > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(ccGrossRevenueUSD)}</span></div>
-                <div className="flex justify-between"><span>Net Revenue</span><span>{formatCurrency(ccNetRevenueUSD)}</span></div>
-                <Separator className="my-2" />
-                <div className="flex justify-between"><span>Total Orders</span><span>{formatNumber(ccOrdersUSD)}</span></div>
-                <div className="flex justify-between"><span>Unique Customers</span><span>{formatNumber(new Set(filteredOrders.map(o => o.orderId)).size)}</span></div>
+              <CardContent>
+                <span>{formatCurrency(kpiNetRevenue)}</span>
               </CardContent>
             </Card>
-            {/* Refunds & Chargebacks */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Users className="w-5 h-5 text-blue-400" />
+                <CardTitle className="text-base">Total Orders</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <span>{formatNumber(kpiTotalOrders)}</span>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Users className="w-5 h-5 text-blue-400" />
+                <CardTitle className="text-base">Unique Customers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <span>{formatNumber(new Set(filteredOrders.map(o => o.orderId)).size)}</span>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                <CardTitle className="text-base">Refunds & Chargebacks</CardTitle>
+                <CardTitle className="text-base">Refunds</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1">
-                <div className="flex justify-between"><span>Refunds</span><span className="text-red-500 font-semibold">{formatCurrency(ccRefundsUSD)}</span></div>
-                <div className="flex justify-between"><span>Chargebacks</span><span className="text-red-500 font-semibold">{formatCurrency(ccChargebacksUSD)}</span></div>
+              <CardContent>
+                <span className="text-red-500 font-semibold">{formatCurrency(kpiRefunds)}</span>
               </CardContent>
             </Card>
-            {/* Attribution */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                <CardTitle className="text-base">Chargebacks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <span className="text-red-500 font-semibold">{formatCurrency(kpiChargebacks)}</span>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <Target className="w-5 h-5 text-blue-400" />
-                <CardTitle className="text-base">Attribution</CardTitle>
+                <CardTitle className="text-base">Attributed Orders</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1">
-                <div className="flex justify-between"><span>Attributed Orders</span><span>{formatNumber(attributedOrders)}</span></div>
-                <div className="flex justify-between"><span>Attributed Spend</span><span className={totalAttributedSpend > 0 ? "text-red-500" : ""}>{formatCurrency(totalAttributedSpend)}</span></div>
-                <div className="flex justify-between"><span>Avg. ROAS</span><span className={averageROAS > 1 ? "text-green-500" : averageROAS < 1 ? "text-red-500" : ""}>{averageROAS.toFixed(2)}x</span></div>
+              <CardContent>
+                <span>{formatNumber(attributedOrders)}</span>
               </CardContent>
             </Card>
-            {/* Customer Metrics */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Target className="w-5 h-5 text-blue-400" />
+                <CardTitle className="text-base">Attributed Spend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <span className={totalAttributedSpend > 0 ? "text-red-500" : ""}>{formatCurrency(totalAttributedSpend)}</span>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Target className="w-5 h-5 text-blue-400" />
+                <CardTitle className="text-base">Avg. ROAS</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <span className={averageROAS > 1 ? "text-green-500" : averageROAS < 1 ? "text-red-500" : ""}>{averageROAS.toFixed(2)}x</span>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <Users className="w-5 h-5 text-green-400" />
-                <CardTitle className="text-base">Customer Metrics</CardTitle>
+                <CardTitle className="text-base">Avg. Order Value</CardTitle>
             </CardHeader>
-              <CardContent className="space-y-1">
-                <div className="flex justify-between"><span>Unique Customers</span><span>{formatNumber(new Set(filteredOrders.map(o => o.orderId)).size)}</span></div>
-                <div className="flex justify-between"><span>Avg. Order Value</span><span className={totalOrders > 0 && totalRevenue > 0 ? "text-green-500" : ""}>{totalOrders > 0 ? formatCurrency(totalRevenue / totalOrders) : "$0.00"}</span></div>
+              <CardContent>
+                <span className={totalOrders > 0 && totalRevenue > 0 ? "text-green-500" : ""}>{totalOrders > 0 ? formatCurrency(totalRevenue / totalOrders) : "$0.00"}</span>
             </CardContent>
           </Card>
-          {/* COGS */}
           <Card>
             <CardHeader className="flex flex-row items-center gap-2">
               <Package className="w-5 h-5 text-purple-400" />
-              <CardTitle className="text-base">COGS</CardTitle>
+              <CardTitle className="text-base">Total COGS</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-1">
-              <div className="flex justify-between"><span>Total COGS</span><span className={totalCOGS > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(totalCOGS)}</span></div>
-              <div className="flex justify-between"><span>Avg. COGS per Order</span><span className={averageCOGS > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(averageCOGS)}</span></div>
+            <CardContent>
+              <span className={totalCogs > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(totalCogs)}</span>
             </CardContent>
           </Card>
-          </div>
-
+          <Card>
+            <CardHeader className="flex flex-row items-center gap-2">
+              <Package className="w-5 h-5 text-purple-400" />
+              <CardTitle className="text-base">Avg. COGS per Order</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <span className={averageCOGS > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(averageCOGS)}</span>
+            </CardContent>
+          </Card>
+          {/* Payment Processing Fee KPI Card with Dialog */}
+          <Card
+            onClick={() => setOpenPaymentDialog(true)}
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            tabIndex={0}
+            role="button"
+            aria-label="Show payment processing fee breakdown"
+          >
+            <CardHeader className="flex flex-row items-center gap-2">
+              <DollarSign className="w-5 h-5 text-blue-400" />
+              <CardTitle className="text-base">Total Payment Processing Fee</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <span className={totalPaymentProcessingFees > 0 ? "text-red-500 font-semibold" : ""}>{formatCurrency(totalPaymentProcessingFees)}</span>
+            </CardContent>
+          </Card>
+        </div>
           {/* Orders Over Time */}
           <AreaChart
             data={(() => {
@@ -681,7 +766,6 @@ export default function CheckoutChampPlatformPage() {
             color="#3b82f6"
             yAxisFormatter={formatNumber}
           />
-
           {/* Orders by Country */}
           <PieChart
             data={(() => {
@@ -697,7 +781,6 @@ export default function CheckoutChampPlatformPage() {
             dataKey="value"
             nameKey="name"
           />
-
           {/* Payment Method Distribution */}
           <PieChart
             data={(() => {
@@ -713,7 +796,6 @@ export default function CheckoutChampPlatformPage() {
             dataKey="value"
             nameKey="name"
           />
-
           {/* Upsell Rate Over Time */}
           <BarChart
             data={(() => {
@@ -736,7 +818,6 @@ export default function CheckoutChampPlatformPage() {
             xAxisDataKey="date"
             yAxisFormatter={(v: number) => `${v.toFixed(1)}%`}
           />
-
           {/* Attributed vs. Unattributed Orders */}
           <PieChart
             data={(() => {
@@ -754,8 +835,8 @@ export default function CheckoutChampPlatformPage() {
             dataKey="value"
             nameKey="name"
           />
-
-          <Card className="w-full">
+          {/* Platform Attribution */}
+          <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center space-x-2">
                 <span>Platform Attribution</span>
@@ -801,7 +882,7 @@ export default function CheckoutChampPlatformPage() {
             </CardHeader>
             <CardContent>
               <DataTable
-                data={processedProductSummary}
+                data={productBreakdown}
                 columns={productColumns}
                 onColumnToggle={() => {}}
               />
@@ -816,7 +897,7 @@ export default function CheckoutChampPlatformPage() {
             </CardHeader>
             <CardContent>
               <DataTable
-                data={processedCampaignSummary}
+                data={campaignBreakdown}
                 columns={campaignColumns}
                 onColumnToggle={() => {}}
               />
@@ -831,7 +912,7 @@ export default function CheckoutChampPlatformPage() {
             </CardHeader>
             <CardContent>
               <DataTable
-                data={processedSourceSummary}
+                data={sourceBreakdown}
                 columns={sourceColumns}
                 onColumnToggle={() => {}}
               />
@@ -919,14 +1000,14 @@ export default function CheckoutChampPlatformPage() {
                     <Popover>
                       <PopoverTrigger asChild>
                         <button className="w-full border rounded px-2 py-2 text-left text-sm">
-                          From: {filters.dateRange.from}
+                          From: {from}
                         </button>
                       </PopoverTrigger>
                       <PopoverContent>
                         <Calendar
                           mode="single"
                           captionLayout="dropdown"
-                          selected={new Date(filters.dateRange.from)}
+                          selected={new Date(from)}
                           onSelect={date =>
                             date &&
                             handleDateRangeChange("from", date.toISOString().slice(0, 10))
@@ -937,14 +1018,14 @@ export default function CheckoutChampPlatformPage() {
                     <Popover>
                       <PopoverTrigger asChild>
                         <button className="w-full border rounded px-2 py-2 text-left text-sm">
-                          To: {filters.dateRange.to}
+                          To: {to}
                         </button>
                       </PopoverTrigger>
                       <PopoverContent>
                         <Calendar
                           mode="single"
                           captionLayout="dropdown"
-                          selected={new Date(filters.dateRange.to)}
+                          selected={new Date(to)}
                           onSelect={date =>
                             date &&
                             handleDateRangeChange("to", date.toISOString().slice(0, 10))
@@ -1034,6 +1115,30 @@ export default function CheckoutChampPlatformPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Payment Processing Fee KPI Card with Dialog */}
+          {/* Dialog for payment method breakdown */}
+          <Dialog open={openPaymentDialog} onOpenChange={setOpenPaymentDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Payment Methods Breakdown</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                {paymentMethodCounts.length === 0 ? (
+                  <div className="text-muted-foreground">No payment methods found.</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {paymentMethodCounts.map(({ method, count }) => (
+                      <li key={method} className="flex justify-between border-b pb-1">
+                        <span className="font-medium">{method}</span>
+                        <span className="text-sm text-muted-foreground">{count} order{count !== 1 ? 's' : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

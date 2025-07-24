@@ -53,8 +53,8 @@ const navItems = [
     group: 'main'
   },
   {
-    href: '/opex',
-    label: 'OPEX Management',
+    href: '/cogs-calculations',
+    label: 'COGS Calculations',
     icon: Calculator,
     group: 'main'
   },
