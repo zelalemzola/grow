@@ -287,7 +287,6 @@ export const fetchAdUpData = async (
 export const fetchCheckoutChampOrders = async (
   filters: DashboardFilters
 ): Promise<Order[]> => {
-  // Helper to format date as MM/DD/YYYY
   function formatDateMMDDYYYY(dateStr: string) {
     const d = new Date(dateStr);
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -303,45 +302,61 @@ export const fetchCheckoutChampOrders = async (
     }
     const startDate = formatDateMMDDYYYY(filters.dateRange.from);
     const endDate = formatDateMMDDYYYY(filters.dateRange.to);
-    const params = new URLSearchParams({
-      loginId,
-      password,
-      startDate,
-      endDate,
-    });
-    const url = `https://api.checkoutchamp.com/order/query/?${params.toString()}`;
-    const response = await fetch(url, { method: 'GET' });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Checkout Champ API error: ${text}`);
-    }
-    const apiData = await response.json();
-    if (
-      apiData &&
-      apiData.result === "SUCCESS" &&
-      apiData.message &&
-      Array.isArray(apiData.message.data)
-    ) {
-      return apiData.message.data.map((order: any) => {
-        let sku = '-';
-        let upsell = false;
-        if (order.items && typeof order.items === 'object') {
-          const itemsArr = Object.values(order.items);
-          sku = itemsArr.map((item: any) => item.productSku).filter(Boolean).join(', ');
-          upsell = itemsArr.some((item: any) => item.productType === 'UPSALE');
-        }
-        return {
-          ...order,
-          sku,
-          upsell,
-        };
+    const resultsPerPage = 100; // Use max allowed or adjust as needed
+    let page = 1;
+    let totalResults = 0;
+    let allOrders: any[] = [];
+    let keepFetching = true;
+    do {
+      const params = new URLSearchParams({
+        loginId,
+        password,
+        startDate,
+        endDate,
+        page: String(page),
+        resultsPerPage: String(resultsPerPage),
       });
-    }
-    throw new Error(
-      apiData && apiData.message && typeof apiData.message === 'string'
-        ? apiData.message
-        : 'Unknown error from Checkout Champ API'
-    );
+      const url = `https://api.checkoutchamp.com/order/query/?${params.toString()}`;
+      const response = await fetch(url, { method: 'GET' });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Checkout Champ API error: ${text}`);
+      }
+      const apiData = await response.json();
+      if (
+        apiData &&
+        apiData.result === "SUCCESS" &&
+        apiData.message &&
+        Array.isArray(apiData.message.data)
+      ) {
+        if (page === 1) {
+          totalResults = apiData.message.totalResults || 0;
+        }
+        allOrders = allOrders.concat(apiData.message.data.map((order: any) => {
+          let sku = '-';
+          let upsell = false;
+          if (order.items && typeof order.items === 'object') {
+            const itemsArr = Object.values(order.items);
+            sku = itemsArr.map((item: any) => item.productSku).filter(Boolean).join(', ');
+            upsell = itemsArr.some((item: any) => item.productType === 'UPSALE');
+          }
+          return {
+            ...order,
+            sku,
+            upsell,
+          };
+        }));
+        // If we have all results, stop fetching
+        if (allOrders.length >= totalResults || apiData.message.data.length < resultsPerPage) {
+          keepFetching = false;
+        } else {
+          page++;
+        }
+      } else {
+        keepFetching = false;
+      }
+    } while (keepFetching);
+    return allOrders;
   } catch (error) {
     console.error('Error fetching Checkout Champ orders:', error);
     throw error;

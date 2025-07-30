@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  grow-app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Add your environment variables here
+      - OUTBRAIN_TOKEN=${OUTBRAIN_TOKEN}
+      - TABOOLA_CLIENT_ID=${TABOOLA_CLIENT_ID}
+      - TABOOLA_CLIENT_SECRET=${TABOOLA_CLIENT_SECRET}
+      - TABOOLA_ACCOUNT_ID=${TABOOLA_ACCOUNT_ID}
+      - ADUP_CLIENT_ID=${ADUP_CLIENT_ID}
+      - ADUP_CLIENT_SECRET=${ADUP_CLIENT_SECRET}
+      - CHECKOUT_CHAMP_USERNAME=${CHECKOUT_CHAMP_USERNAME}
+      - CHECKOUT_CHAMP_PASSWORD=${CHECKOUT_CHAMP_PASSWORD}
+      - FOREX_API=${FOREX_API}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+    restart: unless-stopped
+    # Optional: Add health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/tokens/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3 

@@ -57,19 +57,30 @@ export const useCogsStore = create<COGSStoreState>((set, get) => ({
     if (!res.ok) return;
     const data = await res.json();
     set(state => {
-      const products = data.reduce((acc: Record<string, COGSProduct>, p: any) => {
-        acc[p.sku] = {
-          sku: p.sku,
-          name: p.name,
-          price: state.products[p.sku]?.price || 0,
-          productCost: p.productCost,
-          qty: state.products[p.sku]?.qty || 0,
-        };
-        return acc;
-      }, {});
+      // Only update products that don't already exist or merge with existing ones
+      const updatedProducts = { ...state.products };
+      for (const p of data) {
+        if (updatedProducts[p.sku]) {
+          // Merge with existing product, keeping price and qty
+          updatedProducts[p.sku] = {
+            ...updatedProducts[p.sku],
+            productCost: p.productCost,
+            name: p.name || updatedProducts[p.sku].name,
+          };
+        } else {
+          // Add new product from DB
+          updatedProducts[p.sku] = {
+            sku: p.sku,
+            name: p.name,
+            price: 0,
+            productCost: p.productCost,
+            qty: 0,
+          };
+        }
+      }
       return {
-        products,
-        totalCogs: calculateTotalCogs(products),
+        products: updatedProducts,
+        totalCogs: calculateTotalCogs(updatedProducts),
       };
     });
   },
