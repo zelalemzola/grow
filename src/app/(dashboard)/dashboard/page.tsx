@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { fetchCheckoutChampOrders } from '@/lib/api';
 import DashboardClient from '@/components/client/DashboardClient';
 
+// Force dynamic rendering to prevent build-time static generation
+export const dynamic = 'force-dynamic';
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -64,12 +66,27 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       }
     });
 
-    // ✅ Fetch CheckoutChamp products server-side (static IP)
-    const productsRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/checkoutchamp/products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const productsData = productsRes.ok ? await productsRes.json() : [];
+    // ✅ Fetch CheckoutChamp products directly from API (no internal HTTP call)
+    let productsData: any[] = [];
+    try {
+      const loginId = process.env.CHECKOUT_CHAMP_USERNAME;
+      const password = process.env.CHECKOUT_CHAMP_PASSWORD;
+      const apiUrl = `https://api.checkoutchamp.com/product/query/?loginId=${loginId}&password=${password}`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        productsData = Object.values(data.message || {});
+      }
+    } catch (error) {
+      console.error('Error fetching CheckoutChamp products:', error);
+      productsData = [];
+    }
 
     // Pass the data to the client component
     return <DashboardClient 

@@ -95,6 +95,7 @@ export default function DashboardClient({
   const { data: ordersData } = useQuery<Order[]>({
     queryKey: ["orders", { from, to }],
     queryFn: async () => {
+      console.log('🔄 Refetching CheckoutChamp orders for date range:', { from, to });
       const res = await fetch(`/api/checkoutchamp?startDate=${from}&endDate=${to}`);
       if (!res.ok) return [];
       const data = await res.json();
@@ -103,7 +104,22 @@ export default function DashboardClient({
       return [];
     },
     initialData: initialOrders, // Use server-fetched data as initial data
-    enabled: from !== initialDateRange.from || to !== initialDateRange.to, // Enable when date range changes from initial
+    enabled: true, // Always enable to allow refetching when date range changes
+  });
+
+  // Use initial products data, but allow refetching
+  const { data: productsData } = useQuery<any[]>({
+    queryKey: ["checkoutchamp-products"],
+    queryFn: async () => {
+      const res = await fetch('/api/checkoutchamp/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    },
+    initialData: initialProducts, // Use server-fetched data as initial data
+    enabled: true, // Always enable to allow refetching
   });
 
   // Fetch other platform data (client-side)
@@ -134,9 +150,6 @@ export default function DashboardClient({
       return Array.isArray(raw) ? raw : (raw.results || raw.rows || []);
     },
   });
-
-  // Use initial products data
-  const productsData = initialProducts;
 
   // Build SKUCost array for calculateKPIs
   const productArray = Array.isArray(productsData) && productsData[3] && Array.isArray(productsData[3]) 
@@ -211,12 +224,12 @@ export default function DashboardClient({
     
     // Debug logging for order status filtering
     if (entry.orderStatus !== 'COMPLETE') {
-      console.log('🔍 Filtered out order:', {
-        orderId: entry.orderId,
-        orderStatus: entry.orderStatus,
-        dateCreated: entry.dateCreated,
-        totalAmount: entry.totalAmount
-      });
+      // console.log('🔍 Filtered out order:', {
+      //   orderId: entry.orderId,
+      //   orderStatus: entry.orderStatus,
+      //   dateCreated: entry.dateCreated,
+      //   totalAmount: entry.totalAmount
+      // });
       return undefined;
     }
     
@@ -268,12 +281,12 @@ export default function DashboardClient({
     : [];
 
   // Debug logging for order processing
-  console.log('🔍 Order Processing Summary:', {
-    rawOrdersCount: Array.isArray(ordersData) ? ordersData.length : 0,
-    processedOrdersCount: allOrders.length,
-    dateRange: `${from} to ${to}`,
-    sampleOrder: allOrders[0] || null
-  });
+  // console.log('🔍 Order Processing Summary:', {
+  //   rawOrdersCount: Array.isArray(ordersData) ? ordersData.length : 0,
+  //   processedOrdersCount: allOrders.length,
+  //   dateRange: `${from} to ${to}`,
+  //   sampleOrder: allOrders[0] || null
+  // });
 
   // Define allAdSpend in main scope for consistent calculations
   const allAdSpend = [

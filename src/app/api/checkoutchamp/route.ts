@@ -37,10 +37,10 @@ async function handle(req: NextRequest) {
       return NextResponse.json({ error: 'Missing startDate or endDate' }, { status: 400 });
     }
     
-    console.log('🔍 Client API Request:', {
-      originalFrom: filters.dateRange.from,
-      originalTo: filters.dateRange.to
-    });
+    // console.log('🔍 Client API Request:', {
+    //   originalFrom: filters.dateRange.from,
+    //   originalTo: filters.dateRange.to
+    // });
     
     // Normalize date format for CheckoutChamp API (matching server-side format)
     filters.dateRange = {
@@ -48,17 +48,17 @@ async function handle(req: NextRequest) {
       to: toMMDDYYYY(filters.dateRange.to),
     };
     
-    console.log('🔍 Client API Normalized Dates:', {
-      normalizedFrom: filters.dateRange.from,
-      normalizedTo: filters.dateRange.to
-    });
+    // console.log('🔍 Client API Normalized Dates:', {
+    //   normalizedFrom: filters.dateRange.from,
+    //   normalizedTo: filters.dateRange.to
+    // });
     
     const data = await fetchCheckoutChampOrders(filters);
     
-    console.log('🔍 Client API Response:', {
-      dataLength: Array.isArray(data) ? data.length : 0,
-      dateRange: `${filters.dateRange.from} to ${filters.dateRange.to}`
-    });
+    // console.log('🔍 Client API Response:', {
+    //   dataLength: Array.isArray(data) ? data.length : 0,
+    //   dateRange: `${filters.dateRange.from} to ${filters.dateRange.to}`
+    // });
     
     return NextResponse.json(data, { headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate' } });
   } catch (error: any) {

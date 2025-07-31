@@ -2,6 +2,9 @@ import { fetchCheckoutChampOrders } from '@/lib/api';
 import CogsCalculationsClient from '@/components/client/CogsCalculationsClient';
 import { cookies } from 'next/headers';
 
+// Force dynamic rendering to prevent build-time static generation
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "NODE_OPTIONS='--dns-result-order=ipv4first' next start",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {

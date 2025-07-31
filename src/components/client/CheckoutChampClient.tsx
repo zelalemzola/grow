@@ -251,7 +251,7 @@ export default function CheckoutChampClient({
     queryKey: ['checkoutchamp-orders', { dateRange: { from, to } }],
     queryFn: () => fetch(`/api/checkoutchamp?startDate=${from}&endDate=${to}`).then(res => res.json()),
     initialData: initialOrders, // Use server-fetched data as initial data
-    enabled: from !== initialDateRange.from || to !== initialDateRange.to, // Only refetch if date changed
+    enabled: true, // Always enable to allow refetching when date range changes
   });
 
   const { data: adSpendData, isLoading: adSpendLoading, error: adSpendError } = useQuery<AdSpendEntry[]>({
@@ -259,8 +259,20 @@ export default function CheckoutChampClient({
     queryFn: () => fetchAdSpendData({ dateRange: { from, to } }),
   });
 
-  // Use initial products data
-  const productsData = initialProducts;
+  // Use initial products data, but allow refetching
+  const { data: productsData } = useQuery<any[]>({
+    queryKey: ['checkoutchamp-products'],
+    queryFn: async () => {
+      const res = await fetch('/api/checkoutchamp/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    },
+    initialData: initialProducts, // Use server-fetched data as initial data
+    enabled: true, // Always enable to allow refetching
+  });
 
   // Extract product cost data
   const productArray = Array.isArray(productsData) && productsData[3] && Array.isArray(productsData[3]) 
@@ -289,14 +301,14 @@ export default function CheckoutChampClient({
         if (skuCost) {
             const itemCogs = skuCost.unitCogs + skuCost.shippingCost + (skuCost.handlingFee || 0);
             totalCogs += itemCogs;
-            console.log(`[COGS] Adding SKU: ${sku}, unitCogs: ${skuCost.unitCogs}, shipping: ${skuCost.shippingCost}, handling: ${skuCost.handlingFee}, itemCogs: ${itemCogs}, runningTotal: ${totalCogs}`);
+            // console.log(`[COGS] Adding SKU: ${sku}, unitCogs: ${skuCost.unitCogs}, shipping: ${skuCost.shippingCost}, handling: ${skuCost.handlingFee}, itemCogs: ${itemCogs}, runningTotal: ${totalCogs}`);
           } else {
-            console.log(`[COGS] No cost found for SKU: ${sku}`);
+            // console.log(`[COGS] No cost found for SKU: ${sku}`);
           }
         }
       });
     });
-    console.log(`[COGS] Final total COGS: ${totalCogs}`);
+    // console.log(`[COGS] Final total COGS: ${totalCogs}`);
     return totalCogs;
   };
 

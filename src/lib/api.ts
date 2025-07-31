@@ -318,50 +318,22 @@ export const fetchCheckoutChampOrders = async (
       });
       const url = `https://api.checkoutchamp.com/order/query/?${params.toString()}`;
       
-      console.log('🔍 CheckoutChamp API Request:', {
-        url: url.replace(/loginId=[^&]+&password=[^&]+/, 'loginId=***&password=***'),
-        page,
-        startDate,
-        endDate
-      });
-      
       const response = await fetch(url, { 
         method: 'GET',
-        // Force IPv4 for outbound requests
         signal: AbortSignal.timeout(30000) // 30 second timeout
       });
       
-      console.log('🔍 CheckoutChamp API Response Status:', response.status, response.statusText);
-      
       if (!response.ok) {
         const text = await response.text();
-        console.error('❌ CheckoutChamp API Error Response:', {
+        console.error('❌ CheckoutChamp API Error:', {
           status: response.status,
           statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: text,
-          url: url.replace(/loginId=[^&]+&password=[^&]+/, 'loginId=***&password=***')
+          error: text
         });
-        
-        // Try to parse as JSON for more detailed error info
-        try {
-          const errorJson = JSON.parse(text);
-          console.error('❌ CheckoutChamp API Error Details:', errorJson);
-        } catch (e) {
-          // If not JSON, log as text
-          console.error('❌ CheckoutChamp API Error Text:', text);
-        }
-        
         throw new Error(`Checkout Champ API error: ${text}`);
       }
       
       const apiData = await response.json();
-      console.log('✅ CheckoutChamp API Success:', {
-        result: apiData.result,
-        dataLength: apiData.message?.data?.length || 0,
-        totalResults: apiData.message?.totalResults || 0,
-        page
-      });
       
       if (
         apiData &&
@@ -393,15 +365,9 @@ export const fetchCheckoutChampOrders = async (
           page++;
         }
       } else {
-        console.warn('⚠️ CheckoutChamp API Unexpected Response:', apiData);
         keepFetching = false;
       }
     } while (keepFetching);
-    
-    console.log('✅ CheckoutChamp Orders Fetch Complete:', {
-      totalOrders: allOrders.length,
-      dateRange: `${startDate} to ${endDate}`
-    });
     
     return allOrders;
   } catch (error) {
