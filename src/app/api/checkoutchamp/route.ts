@@ -62,7 +62,7 @@ async function handle(req: NextRequest) {
     
     return NextResponse.json(data, { headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate' } });
   } catch (error: any) {
-    console.error('🔍 Client API Error:', error);
+    console.error('🔍 Client API Error:', error.message);
     return NextResponse.json({ error: error.message || 'Failed to fetch Checkout Champ data' }, { status: 500 });
   }
 }
