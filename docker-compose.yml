@@ -1,8 +1,9 @@
-version: '3.8'
-
 services:
   grow-app:
-    build: .
+    build:
+      context: .
+    image: ghcr.io/zelalemzola/grow
+    platform: linux/amd64
     ports:
       - "3000:3000"
     environment:

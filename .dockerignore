@@ -1,8 +1,7 @@
+Dockerfile
 .dockerignore
 node_modules
-
 npm-debug.log
-readme.md
-
+README.md
 .next
 .git
