@@ -317,7 +317,11 @@ export const fetchCheckoutChampOrders = async (
         resultsPerPage: String(resultsPerPage),
       });
       const url = `https://api.checkoutchamp.com/order/query/?${params.toString()}`;
-      const response = await fetch(url, { method: 'GET' });
+      const response = await fetch(url, { 
+        method: 'GET',
+        // Force IPv4 for outbound requests
+        signal: AbortSignal.timeout(30000) // 30 second timeout
+      });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`Checkout Champ API error: ${text}`);
