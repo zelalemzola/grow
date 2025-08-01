@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useCogsStore, COGSProduct } from "@/lib/cogsStore";
 import { useDateRangeStore } from "@/lib/dateRangeStore";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { History } from "lucide-react";
 
 // Types for the props
 interface CogsCalculationsClientProps {
@@ -41,61 +43,91 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
   const { products: dbProducts, setProduct, setProducts, totalCogs, loadCogsProducts, saveCogsProduct } = useCogsStore();
   const [calendarOpen, setCalendarOpen] = useState<{ from: boolean; to: boolean }>({ from: false, to: false });
   const [saveStatus, setSaveStatus] = useState<{ [sku: string]: 'idle' | 'saving' | 'saved' | 'error' }>({});
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
-  const productsSetRef = useRef(false);
 
-  // Initialize data only once
+  // Initialize date range from URL params
   useEffect(() => {
     if (!initialized.current) {
       initialized.current = true;
-      
-      const init = async () => {
-        try {
-          setIsLoading(true);
-          await loadDateRange();
-          await loadCogsProducts(); // ✅ Wait for DB to load first
-          
-          // Get fresh DB data directly from API
-          const dbRes = await fetch('/api/cogs-products');
-          const dbData = dbRes.ok ? await dbRes.json() : [];
-          const dbProductsMap = dbData.reduce((acc: Record<string, any>, p: any) => {
+      loadDateRange();
+    }
+  }, [loadDateRange]);
+
+  // React Query for orders data with proper caching
+  const { data: ordersData, isLoading: ordersLoading, isRefetching: ordersRefetching, refetch: refetchOrders } = useQuery<any[]>({
+    queryKey: ['cogs-orders', { from, to }],
+    queryFn: async () => {
+      console.log('🔄 Refetching COGS orders for date range:', { from, to });
+      const res = await fetch(`/api/checkoutchamp?startDate=${from}&endDate=${to}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.results)) return data.results;
+      return [];
+    },
+    initialData: initialOrders, // Use server-fetched data as initial data
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Data never becomes stale automatically
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+    refetchOnMount: false, // Don't refetch on component mount
+    refetchOnReconnect: false, // Don't refetch on network reconnect
+  });
+
+  // React Query for COGS products data
+  const { data: cogsProductsData, isLoading: cogsLoading } = useQuery<any[]>({
+    queryKey: ['cogs-products'],
+    queryFn: async () => {
+      const res = await fetch('/api/cogs-products');
+      if (!res.ok) return [];
+      return await res.json();
+    },
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Data never becomes stale automatically
+    gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+  });
+
+  // Manual refetch when date range changes
+  useEffect(() => {
+    if (from && to && ordersData && ordersData.length > 0) {
+      console.log('📅 Date range changed, manually refetching COGS orders:', { from, to });
+      refetchOrders();
+    }
+  }, [from, to, refetchOrders]);
+
+  // Process orders and products when data changes
+  useEffect(() => {
+    const processData = async () => {
+      try {
+        await loadCogsProducts(); // Load COGS products from store
+        
+        if (ordersData && ordersData.length > 0 && cogsProductsData) {
+          // Create a map of existing COGS products
+          const cogsProductsMap = cogsProductsData.reduce((acc: Record<string, any>, p: any) => {
             acc[p.sku] = p;
             return acc;
           }, {});
           
-          // Process initial orders AFTER DB is loaded
-          if (initialOrders.length > 0) {
-            const aggregated = aggregateProducts(initialOrders);
-            const productsWithCosts = aggregated.map(p => ({
-              ...p,
-              productCost: dbProductsMap[p.sku]?.productCost ?? 0, // ✅ Use fresh DB values
-            }));
-            setProducts(productsWithCosts);
-          }
-        } catch (error) {
-          console.error('Error initializing:', error);
-          setError('Failed to load data');
-        } finally {
-          setIsLoading(false);
+          // Aggregate products from orders
+          const aggregated = aggregateProducts(ordersData);
+          const productsWithCosts = aggregated.map(p => ({
+            ...p,
+            productCost: cogsProductsMap[p.sku]?.productCost ?? 0, // Use existing COGS values
+          }));
+          setProducts(productsWithCosts);
         }
-      };
-      
-      init();
-    }
-    
-    // Cleanup function to reset refs on unmount
-    return () => {
-      initialized.current = false;
-      productsSetRef.current = false;
+      } catch (error) {
+        console.error('Error processing COGS data:', error);
+        setError('Failed to process data');
+      }
     };
-  }, []); // ✅ Remove all dependencies to prevent loops
-
-  // Reset productsSetRef when initialOrders change (new data from server)
-  useEffect(() => {
-    productsSetRef.current = false;
-  }, [initialOrders]);
+    
+    processData();
+  }, [ordersData, cogsProductsData, loadCogsProducts, setProducts]);
 
   // Handlers for calendar
   const handleDateChange = useCallback((field: 'from' | 'to', date: Date | undefined) => {
@@ -120,7 +152,7 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
   const productRows = useMemo(() => Object.values(dbProducts), [dbProducts]);
 
   // Show loading state
-  if (isLoading) {
+  if (ordersLoading || cogsLoading) {
     return (
       <div className="container-responsive space-y-6 py-8">
         <Card>
@@ -168,7 +200,10 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
     <div className="container-responsive space-y-6 py-8">
       <Card>
         <CardHeader>
-          <CardTitle>COGS Calculations</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            COGS Calculations
+            {ordersRefetching && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 mb-6">
@@ -209,6 +244,29 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
                 />
               </PopoverContent>
             </Popover>
+            {/* Manual Refresh Button */}
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => {
+                console.log('🔄 Manual refresh triggered for COGS calculations');
+                refetchOrders();
+              }}
+              disabled={ordersRefetching}
+              className="flex items-center gap-2"
+            >
+              {ordersRefetching ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <History className="w-4 h-4" />
+                  Refresh Data
+                </>
+              )}
+            </Button>
           </div>
           <div className="overflow-x-auto rounded border">
             <table className="min-w-full text-sm">

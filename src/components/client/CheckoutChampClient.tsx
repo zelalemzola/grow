@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { DollarSign, AlertTriangle, Target, Users, BarChart3, Package } from "lucide-react";
+import { DollarSign, AlertTriangle, Target, Users, BarChart3, Package, History } from "lucide-react";
 import { FilterPanel } from "@/components/dashboard/FilterPanel";
 import { DataTable } from "@/components/dashboard/DataTable";
 import { ExportButton } from "@/components/dashboard/ExportButton";
@@ -34,6 +34,7 @@ import { useDateRangeStore } from "@/lib/dateRangeStore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePaymentFeeStore } from "@/lib/paymentFeeStore";
 import { useOpexStore } from '@/lib/opexStore';
+import { Button } from "@/components/ui/button";
 
 // Enhanced order type with attribution data
 interface EnhancedOrder extends Order {
@@ -246,21 +247,40 @@ export default function CheckoutChampClient({
   });
   const eurToUsdRate: number = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
 
-  // Use initial orders data, but allow refetching when date range changes
-  const { data: ordersData, isLoading: ordersLoading, error: ordersError } = useQuery<Order[]>({
+  // Use initial orders data with proper caching and revalidation
+  const { data: ordersData, isLoading: ordersLoading, error: ordersError, isRefetching: ordersRefetching, refetch: refetchOrders } = useQuery<Order[]>({
     queryKey: ['checkoutchamp-orders', { dateRange: { from, to } }],
     queryFn: () => fetch(`/api/checkoutchamp?startDate=${from}&endDate=${to}`).then(res => res.json()),
     initialData: initialOrders, // Use server-fetched data as initial data
-    enabled: true, // Always enable to allow refetching when date range changes
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Data never becomes stale automatically
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+    refetchOnMount: false, // Don't refetch on component mount
+    refetchOnReconnect: false, // Don't refetch on network reconnect
   });
+
+  // Manual refetch when date range changes
+  useEffect(() => {
+    if (from && to && (from !== initialDateRange.from || to !== initialDateRange.to)) {
+      console.log('📅 Date range changed, manually refetching orders:', { from, to });
+      refetchOrders();
+    }
+  }, [from, to, initialDateRange, refetchOrders]);
 
   const { data: adSpendData, isLoading: adSpendLoading, error: adSpendError } = useQuery<AdSpendEntry[]>({
     queryKey: ['ad-spend', { dateRange: { from, to } }],
     queryFn: () => fetchAdSpendData({ dateRange: { from, to } }),
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Data never becomes stale automatically
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
-  // Use initial products data, but allow refetching
-  const { data: productsData } = useQuery<any[]>({
+  // Use initial products data with proper caching
+  const { data: productsData, isLoading: productsLoading } = useQuery<any[]>({
     queryKey: ['checkoutchamp-products'],
     queryFn: async () => {
       const res = await fetch('/api/checkoutchamp/products', {
@@ -271,7 +291,12 @@ export default function CheckoutChampClient({
       return await res.json();
     },
     initialData: initialProducts, // Use server-fetched data as initial data
-    enabled: true, // Always enable to allow refetching
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Products data never becomes stale automatically
+    gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   // Extract product cost data
@@ -632,27 +657,42 @@ const totalCOGS = calculateCOGS(ordersForCOGS, skuCosts);
               <CardHeader className="flex flex-row items-center gap-2">
                 <DollarSign className="w-5 h-5 text-yellow-300" />
                 <CardTitle className="text-base">Total Order Revenue</CardTitle>
+                {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
             </CardHeader>
               <CardContent>
-                <span className={"font-semibold " + (kpiGrossRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiGrossRevenue)}</span>
+                {ordersLoading ? (
+                  <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+                ) : (
+                  <span className={"font-semibold " + (kpiGrossRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiGrossRevenue)}</span>
+                )}
             </CardContent>
           </Card>
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <DollarSign className="w-5 h-5 text-yellow-300" />
                 <CardTitle className="text-base">Net Revenue</CardTitle>
+                {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
               </CardHeader>
               <CardContent>
-                <span>{formatCurrency(kpiNetRevenue)}</span>
+                {ordersLoading ? (
+                  <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+                ) : (
+                  <span>{formatCurrency(kpiNetRevenue)}</span>
+                )}
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center gap-2">
                 <Users className="w-5 h-5 text-blue-400" />
                 <CardTitle className="text-base">Total Orders</CardTitle>
+                {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
               </CardHeader>
               <CardContent>
-                <span>{formatNumber(kpiTotalOrders)}</span>
+                {ordersLoading ? (
+                  <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+                ) : (
+                  <span>{formatNumber(kpiTotalOrders)}</span>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -1039,6 +1079,32 @@ const totalCOGS = calculateCOGS(ordersForCOGS, skuCosts);
                       </PopoverContent>
                     </Popover>
                   </div>
+                </div>
+                {/* Manual Refresh Button */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">Actions</label>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      console.log('🔄 Manual refresh triggered for CheckoutChamp');
+                      refetchOrders();
+                    }}
+                    disabled={ordersRefetching}
+                    className="w-full flex items-center gap-2"
+                  >
+                    {ordersRefetching ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        Refreshing...
+                      </>
+                    ) : (
+                      <>
+                        <History className="w-4 h-4" />
+                        Refresh Data
+                      </>
+                    )}
+                  </Button>
                 </div>
                 {/* SKU Filter */}
                 <div className="space-y-3">
