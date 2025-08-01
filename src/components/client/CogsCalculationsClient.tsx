@@ -99,35 +99,17 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
     }
   }, [from, to, refetchOrders]);
 
-  // Process orders and products when data changes
+  // Background COGS calculation when orders and products load
+  const { calculateCogsFromOrders, isCalculating: cogsCalculating } = useCogsStore();
+  
   useEffect(() => {
-    const processData = async () => {
-      try {
-        await loadCogsProducts(); // Load COGS products from store
-        
-        if (ordersData && ordersData.length > 0 && cogsProductsData) {
-          // Create a map of existing COGS products
-          const cogsProductsMap = cogsProductsData.reduce((acc: Record<string, any>, p: any) => {
-            acc[p.sku] = p;
-            return acc;
-          }, {});
-          
-          // Aggregate products from orders
-          const aggregated = aggregateProducts(ordersData);
-          const productsWithCosts = aggregated.map(p => ({
-            ...p,
-            productCost: cogsProductsMap[p.sku]?.productCost ?? 0, // Use existing COGS values
-          }));
-          setProducts(productsWithCosts);
-        }
-      } catch (error) {
-        console.error('Error processing COGS data:', error);
-        setError('Failed to process data');
-      }
-    };
-    
-    processData();
-  }, [ordersData, cogsProductsData, loadCogsProducts, setProducts]);
+    if (ordersData && ordersData.length > 0) {
+      console.log('🔄 Triggering background COGS calculation for COGS Calculations page');
+      calculateCogsFromOrders(ordersData, []);
+    }
+  }, [ordersData, calculateCogsFromOrders]);
+
+  // Remove the old manual processing effect since we're using background calculation now
 
   // Handlers for calendar
   const handleDateChange = useCallback((field: 'from' | 'to', date: Date | undefined) => {
@@ -152,7 +134,7 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
   const productRows = useMemo(() => Object.values(dbProducts), [dbProducts]);
 
   // Show loading state
-  if (ordersLoading || cogsLoading) {
+  if (ordersLoading || cogsLoading || cogsCalculating) {
     return (
       <div className="container-responsive space-y-6 py-8">
         <Card>
@@ -163,7 +145,9 @@ export default function CogsCalculationsClient({ initialOrders }: CogsCalculatio
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading data...</p>
+                <p className="text-muted-foreground">
+                  {cogsCalculating ? 'Calculating COGS...' : 'Loading data...'}
+                </p>
               </div>
             </div>
           </CardContent>

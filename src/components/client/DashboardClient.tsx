@@ -339,6 +339,16 @@ export default function DashboardClient({
   const [opexInput, setOpexInput] = useState(opex);
   useEffect(() => { loadOpex(); setOpexInput(opex); }, [loadOpex, opex]);
 
+  // Background COGS calculation when orders and products load
+  const { calculateCogsFromOrders, isCalculating: cogsCalculating } = useCogsStore();
+  
+  useEffect(() => {
+    if (ordersData && productsData && ordersData.length > 0) {
+      console.log('🔄 Triggering background COGS calculation for Dashboard');
+      calculateCogsFromOrders(ordersData, productsData);
+    }
+  }, [ordersData, productsData, calculateCogsFromOrders]);
+
   // Net Profit calculation
   let calculatedNetProfit = 0;
   if (kpiResults) {
@@ -595,9 +605,14 @@ export default function DashboardClient({
           <CardHeader className="flex flex-row items-center gap-2">
             <Package className="w-5 h-5 text-purple-400" />
             <CardTitle className="text-base">Total COGS</CardTitle>
+            {cogsCalculating && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
           </CardHeader>
           <CardContent>
-            <span>{formatCurrency(totalCogs ?? 0)}</span>
+            {cogsCalculating ? (
+              <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ) : (
+              <span>{formatCurrency(totalCogs ?? 0)}</span>
+            )}
           </CardContent>
         </Card>
         {/* OPEX KPI Card and Dialog */}

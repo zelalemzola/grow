@@ -299,6 +299,16 @@ export default function CheckoutChampClient({
     refetchOnReconnect: false,
   });
 
+  // Background COGS calculation when orders and products load (moved after React Query declarations)
+  const { calculateCogsFromOrders, isCalculating: cogsCalculating } = useCogsStore();
+  
+  useEffect(() => {
+    if (ordersData && productsData && ordersData.length > 0) {
+      console.log('🔄 Triggering background COGS calculation for CheckoutChamp');
+      calculateCogsFromOrders(ordersData, productsData);
+    }
+  }, [ordersData, productsData, calculateCogsFromOrders]);
+
   // Extract product cost data
   const productArray = Array.isArray(productsData) && productsData[3] && Array.isArray(productsData[3]) 
     ? productsData[3] 

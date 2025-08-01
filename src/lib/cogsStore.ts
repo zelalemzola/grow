@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Order } from './types';
 
 export interface COGSProduct {
   sku: string;
@@ -13,8 +14,10 @@ interface COGSStoreState {
   setProduct: (sku: string, data: Partial<COGSProduct>) => void;
   setProducts: (products: COGSProduct[]) => void;
   totalCogs: number;
+  isCalculating: boolean;
   loadCogsProducts: () => Promise<void>;
   saveCogsProduct: (sku: string, productCost: number, name?: string) => Promise<void>;
+  calculateCogsFromOrders: (orders: Order[], products: any[]) => Promise<void>;
   save: () => void;
   load: () => void;
 }
@@ -23,8 +26,37 @@ function calculateTotalCogs(products: Record<string, COGSProduct>) {
   return Object.values(products).reduce((sum, p) => sum + Number(p.productCost) * Number(p.qty), 0);
 }
 
+// Helper function to aggregate products from orders
+function aggregateProductsFromOrders(orders: Order[]): COGSProduct[] {
+  const map: Record<string, COGSProduct> = {};
+  
+  for (const order of orders) {
+    if (!order.items) continue;
+    for (const item of Object.values(order.items) as any[]) {
+      const sku = (item.productSku || '').trim().toUpperCase();
+      if (!sku) continue;
+      
+      if (!map[sku]) {
+        map[sku] = {
+          sku,
+          name: item.name || sku,
+          price: Number(item.price) || 0,
+          productCost: 0, // Will be populated from database
+          qty: 0,
+        };
+      }
+      map[sku].qty += Number(item.qty) || 1;
+    }
+  }
+  
+  return Object.values(map);
+}
+
 export const useCogsStore = create<COGSStoreState>((set, get) => ({
   products: {},
+  totalCogs: 0,
+  isCalculating: false,
+  
   setProduct: (sku, data) => {
     set(state => {
       const updated = {
@@ -41,6 +73,7 @@ export const useCogsStore = create<COGSStoreState>((set, get) => ({
       };
     });
   },
+  
   setProducts: (products) => set(state => {
     const map = products.reduce((acc, p) => {
       acc[p.sku] = p;
@@ -51,7 +84,55 @@ export const useCogsStore = create<COGSStoreState>((set, get) => ({
       totalCogs: calculateTotalCogs(map),
     };
   }),
-  totalCogs: 0,
+  
+  // New: Background COGS calculation from orders
+  calculateCogsFromOrders: async (orders: Order[], products: any[]) => {
+    try {
+      set({ isCalculating: true });
+      
+      // Step 1: Load existing COGS data from database
+      const dbRes = await fetch('/api/cogs-products');
+      const dbData = dbRes.ok ? await dbRes.json() : [];
+      const dbProductsMap = dbData.reduce((acc: Record<string, any>, p: any) => {
+        acc[p.sku] = p;
+        return acc;
+      }, {});
+      
+      // Step 2: Aggregate products from orders
+      const orderProducts = aggregateProductsFromOrders(orders);
+      
+      // Step 3: Merge with database values
+      const mergedProducts = orderProducts.map(product => ({
+        ...product,
+        productCost: dbProductsMap[product.sku]?.productCost ?? 0, // Use DB value if exists
+      }));
+      
+      // Step 4: Update store with merged data
+      set(state => {
+        const map = mergedProducts.reduce((acc, p) => {
+          acc[p.sku] = p;
+          return acc;
+        }, {} as Record<string, COGSProduct>);
+        
+        return {
+          products: map,
+          totalCogs: calculateTotalCogs(map),
+          isCalculating: false,
+        };
+      });
+      
+      console.log('✅ Background COGS calculation completed:', {
+        ordersCount: orders.length,
+        productsCount: mergedProducts.length,
+        totalCogs: calculateTotalCogs(mergedProducts.reduce((acc, p) => { acc[p.sku] = p; return acc; }, {} as Record<string, COGSProduct>))
+      });
+      
+    } catch (error) {
+      console.error('❌ Error in background COGS calculation:', error);
+      set({ isCalculating: false });
+    }
+  },
+  
   loadCogsProducts: async () => {
     const res = await fetch('/api/cogs-products');
     if (!res.ok) return;
@@ -84,6 +165,7 @@ export const useCogsStore = create<COGSStoreState>((set, get) => ({
       };
     });
   },
+  
   saveCogsProduct: async (sku, productCost, name) => {
     const res = await fetch('/api/cogs-products', {
       method: 'POST',
@@ -109,6 +191,26 @@ export const useCogsStore = create<COGSStoreState>((set, get) => ({
       };
     });
   },
+  
   save: () => {}, // No-op, kept for compatibility
   load: () => {}, // No-op, kept for compatibility
 })); 
+
+// React Query hook for COGS products with 15-minute revalidation
+export const useCogsProductsQuery = () => {
+  const { useQuery } = require('@tanstack/react-query');
+  
+  return useQuery<any[]>({
+    queryKey: ['cogs-products'],
+    queryFn: async () => {
+      const res = await fetch('/api/cogs-products');
+      if (!res.ok) return [];
+      return await res.json();
+    },
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+  });
+}; 
