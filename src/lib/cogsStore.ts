@@ -195,22 +195,3 @@ export const useCogsStore = create<COGSStoreState>((set, get) => ({
   save: () => {}, // No-op, kept for compatibility
   load: () => {}, // No-op, kept for compatibility
 })); 
-
-// React Query hook for COGS products with 15-minute revalidation
-export const useCogsProductsQuery = () => {
-  const { useQuery } = require('@tanstack/react-query');
-  
-  return useQuery<any[]>({
-    queryKey: ['cogs-products'],
-    queryFn: async () => {
-      const res = await fetch('/api/cogs-products');
-      if (!res.ok) return [];
-      return await res.json();
-    },
-    staleTime: 15 * 60 * 1000, // 15 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes cache
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-  });
-}; 
