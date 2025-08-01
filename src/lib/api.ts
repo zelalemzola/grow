@@ -294,26 +294,15 @@ export const fetchCheckoutChampOrders = async (
     const yyyy = d.getFullYear();
     return `${mm}/${dd}/${yyyy}`;
   }
-  try {
-    const loginId = process.env.CHECKOUT_CHAMP_USERNAME;
-    const password = process.env.CHECKOUT_CHAMP_PASSWORD;
-    if (!loginId || !password) {
-      throw new Error('Missing Checkout Champ credentials');
-    }
-    const startDate = formatDateMMDDYYYY(filters.dateRange.from);
-    const endDate = formatDateMMDDYYYY(filters.dateRange.to);
-    const resultsPerPage = 100; // Use max allowed or adjust as needed
-    let page = 1;
-    let totalResults = 0;
-    let allOrders: any[] = [];
-    let keepFetching = true;
-    do {
+
+  // Helper function to fetch a single page
+  async function fetchPage(pageNum: number, startDate: string, endDate: string, loginId: string, password: string, resultsPerPage: number) {
       const params = new URLSearchParams({
         loginId,
         password,
         startDate,
         endDate,
-        page: String(page),
+      page: String(pageNum),
         resultsPerPage: String(resultsPerPage),
       });
       const url = `https://api.checkoutchamp.com/order/query/?${params.toString()}`;
@@ -328,7 +317,8 @@ export const fetchCheckoutChampOrders = async (
         console.error('❌ CheckoutChamp API Error:', {
           status: response.status,
           statusText: response.statusText,
-          error: text
+        error: text,
+        page: pageNum
         });
         throw new Error(`Checkout Champ API error: ${text}`);
       }
@@ -341,10 +331,8 @@ export const fetchCheckoutChampOrders = async (
         apiData.message &&
         Array.isArray(apiData.message.data)
       ) {
-        if (page === 1) {
-          totalResults = apiData.message.totalResults || 0;
-        }
-        allOrders = allOrders.concat(apiData.message.data.map((order: any) => {
+      return {
+        data: apiData.message.data.map((order: any) => {
           let sku = '-';
           let upsell = false;
           if (order.items && typeof order.items === 'object') {
@@ -357,19 +345,82 @@ export const fetchCheckoutChampOrders = async (
             sku,
             upsell,
           };
-        }));
-        // If we have all results, stop fetching
-        if (allOrders.length >= totalResults || apiData.message.data.length < resultsPerPage) {
-          keepFetching = false;
-        } else {
-          page++;
-        }
-      } else {
-        keepFetching = false;
-      }
-    } while (keepFetching);
+        }),
+        totalResults: apiData.message.totalResults || 0,
+        hasMore: apiData.message.data.length === resultsPerPage
+      };
+    }
     
+    return { data: [], totalResults: 0, hasMore: false };
+  }
+
+  try {
+    const loginId = process.env.CHECKOUT_CHAMP_USERNAME;
+    const password = process.env.CHECKOUT_CHAMP_PASSWORD;
+    if (!loginId || !password) {
+      throw new Error('Missing Checkout Champ credentials');
+    }
+    
+    const startDate = formatDateMMDDYYYY(filters.dateRange.from);
+    const endDate = formatDateMMDDYYYY(filters.dateRange.to);
+    const resultsPerPage = 100; // Use max allowed or adjust as needed
+    const batchSize = 5; // Fetch 5 pages in parallel
+    
+    console.log('🚀 Starting parallel CheckoutChamp data fetch for date range:', { startDate, endDate });
+    
+    // Step 1: Get first page to determine total count
+    console.log('📄 Fetching first page...');
+    const firstPageResult = await fetchPage(1, startDate, endDate, loginId, password, resultsPerPage);
+    const totalResults = firstPageResult.totalResults;
+    const totalPages = Math.ceil(totalResults / resultsPerPage);
+    
+    console.log('📊 Total results:', totalResults, 'Total pages:', totalPages);
+    
+    let allOrders = [...firstPageResult.data];
+    
+    // Step 2: If there are more pages, fetch them in parallel batches
+    if (totalPages > 1) {
+      console.log('🔄 Fetching remaining pages in parallel batches...');
+      
+      // Create batches of page numbers to fetch in parallel
+      const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2); // Start from page 2
+      const batches = [];
+      
+      for (let i = 0; i < remainingPages.length; i += batchSize) {
+        batches.push(remainingPages.slice(i, i + batchSize));
+      }
+      
+      console.log(`📦 Created ${batches.length} batches of ${batchSize} pages each`);
+      
+      // Fetch each batch in parallel
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`🔄 Fetching batch ${batchIndex + 1}/${batches.length} (pages: ${batch.join(', ')})`);
+        
+        try {
+          const batchPromises = batch.map(pageNum => 
+            fetchPage(pageNum, startDate, endDate, loginId, password, resultsPerPage)
+          );
+          
+          const batchResults = await Promise.all(batchPromises);
+          
+          // Process batch results
+          for (const result of batchResults) {
+            allOrders = allOrders.concat(result.data);
+          }
+          
+          console.log(`✅ Batch ${batchIndex + 1} completed. Total orders so far: ${allOrders.length}`);
+          
+        } catch (error) {
+          console.error(`❌ Error in batch ${batchIndex + 1}:`, error);
+          // Continue with other batches even if one fails
+        }
+      }
+    }
+    
+    console.log(`🎉 CheckoutChamp fetch completed. Total orders: ${allOrders.length}`);
     return allOrders;
+    
   } catch (error) {
     console.error('❌ Error fetching Checkout Champ orders:', error);
     throw error;

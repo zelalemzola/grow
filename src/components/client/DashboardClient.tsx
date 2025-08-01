@@ -91,8 +91,8 @@ export default function DashboardClient({
   });
   const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
 
-  // Use initial orders data, but allow refetching when date range changes
-  const { data: ordersData } = useQuery<Order[]>({
+  // Use initial orders data with proper caching and revalidation
+  const { data: ordersData, isLoading: ordersLoading, isRefetching: ordersRefetching, refetch: refetchOrders } = useQuery<Order[]>({
     queryKey: ["orders", { from, to }],
     queryFn: async () => {
       console.log('🔄 Refetching CheckoutChamp orders for date range:', { from, to });
@@ -104,11 +104,24 @@ export default function DashboardClient({
       return [];
     },
     initialData: initialOrders, // Use server-fetched data as initial data
-    enabled: true, // Always enable to allow refetching when date range changes
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Data never becomes stale automatically
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+    refetchOnMount: false, // Don't refetch on component mount
+    refetchOnReconnect: false, // Don't refetch on network reconnect
   });
 
-  // Use initial products data, but allow refetching
-  const { data: productsData } = useQuery<any[]>({
+  // Manual refetch when date range changes
+  useEffect(() => {
+    if (from && to && (from !== initialDateRange.from || to !== initialDateRange.to)) {
+      console.log('📅 Date range changed, manually refetching orders:', { from, to });
+      refetchOrders();
+    }
+  }, [from, to, initialDateRange, refetchOrders]);
+
+  // Use initial products data with proper caching
+  const { data: productsData, isLoading: productsLoading } = useQuery<any[]>({
     queryKey: ["checkoutchamp-products"],
     queryFn: async () => {
       const res = await fetch('/api/checkoutchamp/products', {
@@ -119,7 +132,12 @@ export default function DashboardClient({
       return await res.json();
     },
     initialData: initialProducts, // Use server-fetched data as initial data
-    enabled: true, // Always enable to allow refetching
+    enabled: false, // Disable automatic refetching
+    staleTime: Infinity, // Products data never becomes stale automatically
+    gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   // Fetch other platform data (client-side)
@@ -466,6 +484,29 @@ export default function DashboardClient({
               />
             </PopoverContent>
           </Popover>
+          {/* Manual Refresh Button */}
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => {
+              console.log('🔄 Manual refresh triggered');
+              refetchOrders();
+            }}
+            disabled={ordersRefetching}
+            className="flex items-center gap-2"
+          >
+            {ordersRefetching ? (
+              <>
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <History className="w-4 h-4" />
+                Refresh Data
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
 
@@ -476,36 +517,56 @@ export default function DashboardClient({
           <CardHeader className="flex flex-row items-center gap-2">
             <DollarSign className="w-5 h-5 text-yellow-300" />
             <CardTitle className="text-base">Total Sales</CardTitle>
+            {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
           </CardHeader>
           <CardContent>
-            <span className={"font-semibold " + (kpiGrossRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiGrossRevenue)}</span>
+            {ordersLoading ? (
+              <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ) : (
+              <span className={"font-semibold " + (kpiGrossRevenue > 0 ? "text-green-500" : "text-red-500")}>{formatCurrency(kpiGrossRevenue)}</span>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
             <DollarSign className="w-5 h-5 text-green-400" />
             <CardTitle className="text-base">Total Profit</CardTitle>
+            {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
           </CardHeader>
           <CardContent>
-            <span className={calculatedNetProfit > 0 ? "text-green-500" : calculatedNetProfit < 0 ? "text-red-500" : ""}>{formatCurrency(calculatedNetProfit)}</span>
+            {ordersLoading ? (
+              <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ) : (
+              <span className={calculatedNetProfit > 0 ? "text-green-500" : calculatedNetProfit < 0 ? "text-red-500" : ""}>{formatCurrency(calculatedNetProfit)}</span>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
             <DollarSign className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base">Profit Margin</CardTitle>
+            {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-pulse"></div>}
           </CardHeader>
           <CardContent>
-            <span>{kpiGrossRevenue > 0 ? ((calculatedNetProfit / kpiGrossRevenue) * 100).toFixed(2) + '%' : '-'}</span>
+            {ordersLoading ? (
+              <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ) : (
+              <span>{kpiGrossRevenue > 0 ? ((calculatedNetProfit / kpiGrossRevenue) * 100).toFixed(2) + '%' : '-'}</span>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
             <TargetIcon className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base">ROAS</CardTitle>
+            {ordersRefetching && <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
           </CardHeader>
           <CardContent>
-            <span className={((kpiResults?.roas ?? 0) > 1 ? "text-green-500" : (kpiResults?.roas ?? 0) < 1 ? "text-red-500" : "")}>{formatNumber(kpiResults?.roas ?? 0)}x</span>
+            {ordersLoading ? (
+              <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ) : (
+              <span className={((kpiResults?.roas ?? 0) > 1 ? "text-green-500" : (kpiResults?.roas ?? 0) < 1 ? "text-red-500" : "")}>{formatNumber(kpiResults?.roas ?? 0)}x</span>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -699,6 +760,9 @@ export default function DashboardClient({
             <CardHeader className="flex flex-row items-center gap-2">
               <Icon className="w-5 h-5 text-primary" />
               <CardTitle>{label}</CardTitle>
+              {key === 'CheckoutChamp' && ordersRefetching && (
+                <div className="ml-auto w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              )}
             </CardHeader>
             <CardContent>
               {key !== 'CheckoutChamp' ? (
@@ -710,10 +774,21 @@ export default function DashboardClient({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className="text-xs"><span className="font-medium">Total Orders:</span> {formatNumber(kpiTotalOrders)}</div>
-                  <div className="text-xs"><span className="font-medium">Gross Revenue:</span> {formatCurrency(kpiGrossRevenue)}</div>
-                  <div className="text-xs"><span className="font-medium">Chargebacks:</span> {formatCurrency(kpiChargebacks)}</div>
-                  <div className="text-xs"><span className="font-medium">Refunds:</span> {formatCurrency(kpiRefunds)}</div>
+                  {ordersLoading ? (
+                    <>
+                      <div className="text-xs"><span className="font-medium">Total Orders:</span> <div className="inline-block w-8 h-3 bg-gray-200 rounded animate-pulse"></div></div>
+                      <div className="text-xs"><span className="font-medium">Gross Revenue:</span> <div className="inline-block w-12 h-3 bg-gray-200 rounded animate-pulse"></div></div>
+                      <div className="text-xs"><span className="font-medium">Chargebacks:</span> <div className="inline-block w-10 h-3 bg-gray-200 rounded animate-pulse"></div></div>
+                      <div className="text-xs"><span className="font-medium">Refunds:</span> <div className="inline-block w-8 h-3 bg-gray-200 rounded animate-pulse"></div></div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-xs"><span className="font-medium">Total Orders:</span> {formatNumber(kpiTotalOrders)}</div>
+                      <div className="text-xs"><span className="font-medium">Gross Revenue:</span> {formatCurrency(kpiGrossRevenue)}</div>
+                      <div className="text-xs"><span className="font-medium">Chargebacks:</span> {formatCurrency(kpiChargebacks)}</div>
+                      <div className="text-xs"><span className="font-medium">Refunds:</span> {formatCurrency(kpiRefunds)}</div>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
