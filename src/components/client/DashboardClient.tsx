@@ -349,12 +349,6 @@ export default function DashboardClient({
     }
   }, [ordersData, productsData, calculateCogsFromOrders]);
 
-  // Net Profit calculation
-  let calculatedNetProfit = 0;
-  if (kpiResults) {
-    calculatedNetProfit = kpiNetRevenue - totalCogs - opex - (kpiResults.marketingSpend ?? 0);
-  }
-
   // Filter by platform if selected
   const filteredAdSpend = selectedPlatform === "all"
     ? allAdSpend
@@ -416,6 +410,13 @@ export default function DashboardClient({
     }
     return sum + ((o.usdAmount || 0) * (feePercent / 100));
   }, 0);
+
+  // Net Profit calculation - moved here after totalPaymentProcessingFees is calculated
+  let calculatedNetProfit = 0;
+  if (kpiResults) {
+    // Total Profit = Total Sales - OPEX - COGS - Marketing Spend - Total Payment Processing Fees
+    calculatedNetProfit = kpiGrossRevenue - opex - totalCogs - (kpiResults.marketingSpend ?? 0) - totalPaymentProcessingFees;
+  }
 
   // Unique payment methods and their order counts
   const paymentMethodCounts = useMemo(() => {
