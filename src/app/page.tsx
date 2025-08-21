@@ -78,7 +78,7 @@ export default function HomePage() {
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">Powerful Features</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to track, analyze, and optimize your business performance
+              Everything you need to track, analyze, and optimize your business 
             </p>
           </div>
           
