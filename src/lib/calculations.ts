@@ -19,7 +19,7 @@ export const calculateKPIs = (
   adSpend: AdSpendEntry[],
   skuCosts: SKUCost[],
   fixedExpenses: FixedExpense[],
-  eurToUsdRate: number = 1.10 // Default fallback rate
+  eurToUsdRate: number = 1.16 // Conservative fallback rate
 ): KPICalculation => {
   // Basic calculations
   const grossRevenue = orders.reduce((sum, order) => sum + order.usdAmount, 0);

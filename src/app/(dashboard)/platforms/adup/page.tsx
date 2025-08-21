@@ -135,7 +135,7 @@ export default function AdUpPage() {
     staleTime: 24 * 60 * 60 * 1000, // 1 day
     retry: 1,
   });
-  const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+  const EUR_TO_USD = eurToUsdRateData || 1.08; // Use API rate or conservative fallback
 
   // Collect all keys for columns
   const allKeys = useMemo(() => {

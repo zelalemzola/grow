@@ -1,14 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCheckoutChampOrders } from '@/lib/api';
+import { convertDateRangeToUTC, standardizeDateToUTC } from '@/lib/utils';
 
 // Helper to normalize date to MM/DD/YYYY (matching fetchCheckoutChampOrders)
+// This function now handles timezone conversion to ensure data accuracy
 function toMMDDYYYY(dateStr: string) {
-  const d = new Date(dateStr);
-  // Pad month and day
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
+  try {
+    // First standardize to UTC to handle timezone differences
+    const utcDate = new Date(dateStr + 'T00:00:00.000Z');
+    
+    // If the date is invalid, try parsing as is
+    if (isNaN(utcDate.getTime())) {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) {
+        console.warn('Invalid date string:', dateStr);
+        return dateStr;
+      }
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    }
+    
+    // Convert UTC date to MM/DD/YYYY format
+    const mm = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(utcDate.getUTCDate()).padStart(2, '0');
+    const yyyy = utcDate.getUTCFullYear();
+    return `${mm}/${dd}/${yyyy}`;
+  } catch (error) {
+    console.warn('Error converting date format:', error);
+    return dateStr;
+  }
 }
 
 // Extract filters from GET query params or POST JSON body
@@ -42,13 +64,20 @@ async function handle(req: NextRequest) {
     //   originalTo: filters.dateRange.to
     // });
     
-    // Normalize date format for CheckoutChamp API (matching server-side format)
+    // First standardize dates to UTC to handle timezone differences
+    const utcDateRange = convertDateRangeToUTC(filters.dateRange.from, filters.dateRange.to, 'Europe/Berlin');
+    
+    // Then normalize date format for CheckoutChamp API (matching server-side format)
     filters.dateRange = {
-      from: toMMDDYYYY(filters.dateRange.from),
-      to: toMMDDYYYY(filters.dateRange.to),
+      from: toMMDDYYYY(utcDateRange.from),
+      to: toMMDDYYYY(utcDateRange.to),
     };
     
-    // console.log('🔍 Client API Normalized Dates:', {
+    // console.log('🔍 Client API Timezone Handling:', {
+    //   originalFrom: filters.dateRange.from,
+    //   originalTo: filters.dateRange.to,
+    //   utcFrom: utcDateRange.from,
+    //   utcTo: utcDateRange.to,
     //   normalizedFrom: filters.dateRange.from,
     //   normalizedTo: filters.dateRange.to
     // });

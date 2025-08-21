@@ -288,11 +288,32 @@ export const fetchCheckoutChampOrders = async (
   filters: DashboardFilters
 ): Promise<Order[]> => {
   function formatDateMMDDYYYY(dateStr: string) {
-    const d = new Date(dateStr);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${mm}/${dd}/${yyyy}`;
+    try {
+      // Parse the date and ensure it's treated as UTC to avoid timezone issues
+      const d = new Date(dateStr + 'T00:00:00.000Z');
+      
+      // If the date is invalid, try parsing as is
+      if (isNaN(d.getTime())) {
+        const fallbackDate = new Date(dateStr);
+        if (isNaN(fallbackDate.getTime())) {
+          console.warn('Invalid date string in fetchCheckoutChampOrders:', dateStr);
+          return dateStr;
+        }
+        const mm = String(fallbackDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(fallbackDate.getDate()).padStart(2, '0');
+        const yyyy = fallbackDate.getFullYear();
+        return `${mm}/${dd}/${yyyy}`;
+      }
+      
+      // Use UTC methods to avoid timezone conversion issues
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(d.getUTCDate()).padStart(2, '0');
+      const yyyy = d.getUTCFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    } catch (error) {
+      console.warn('Error formatting date in fetchCheckoutChampOrders:', error);
+      return dateStr;
+    }
   }
 
   // Helper function to fetch a single page

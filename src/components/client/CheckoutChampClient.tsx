@@ -35,6 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { usePaymentFeeStore } from "@/lib/paymentFeeStore";
 import { useOpexStore } from '@/lib/opexStore';
 import { Button } from "@/components/ui/button";
+import { TimezoneInfo } from "@/components/ui/timezone-info";
 
 // Enhanced order type with attribution data
 interface EnhancedOrder extends Order {
@@ -237,15 +238,14 @@ export default function CheckoutChampClient({
     loadOpex();
   }, [loadFees, loadOpex]);
 
-  // Correct useQuery usage: queryKey, queryFn, options
-  // If using React Query v3, use this signature:
-  const { data: eurToUsdRateData } = useQuery<number>({
+  // Fetch EUR to USD rate
+  const { data: eurToUsdRateData, isLoading: eurToUsdLoading, error: eurToUsdError } = useQuery<number>({
     queryKey: ['eur-usd-rate'],
     queryFn: getEurToUsdRate,
     staleTime: 24 * 60 * 60 * 1000, // 1 day
     retry: 1,
   });
-  const eurToUsdRate: number = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+  const eurToUsdRate: number = eurToUsdRateData || 1.08; // Use API rate or conservative fallback
 
   // Use initial orders data with proper caching and revalidation
   const { data: ordersData, isLoading: ordersLoading, error: ordersError, isRefetching: ordersRefetching, refetch: refetchOrders } = useQuery<Order[]>({
@@ -652,6 +652,9 @@ const totalCOGS = calculateCOGS(ordersForCOGS, skuCosts);
         </div>
        
       </div>
+
+      {/* Timezone Information */}
+      <TimezoneInfo className="mb-4" />
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-3">

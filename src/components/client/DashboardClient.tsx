@@ -25,6 +25,7 @@ import { useOpexStore } from "@/lib/opexStore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { usePaymentFeeStore } from "@/lib/paymentFeeStore";
 import type { Order } from '@/lib/types';
+import { TimezoneInfo } from "@/components/ui/timezone-info";
 
 interface OrderWithPaySource extends Order {
   paySource: string;
@@ -83,13 +84,13 @@ export default function DashboardClient({
   };
 
   // Fetch EUR to USD rate
-  const { data: eurToUsdRateData } = useQuery<number>({
+  const { data: eurToUsdRateData, isLoading: eurToUsdLoading, error: eurToUsdError } = useQuery<number>({
     queryKey: ['eur-usd-rate'],
     queryFn: getEurToUsdRate,
     staleTime: 24 * 60 * 60 * 1000, // 1 day
     retry: 1,
   });
-  const EUR_TO_USD = typeof eurToUsdRateData === 'number' && !isNaN(eurToUsdRateData) ? eurToUsdRateData : 1.10;
+  const EUR_TO_USD = eurToUsdRateData || 1.08; // Use API rate or conservative fallback
 
   // Use initial orders data with proper caching and revalidation
   const { data: ordersData, isLoading: ordersLoading, isRefetching: ordersRefetching, refetch: refetchOrders } = useQuery<Order[]>({
@@ -520,6 +521,9 @@ export default function DashboardClient({
           </Button>
         </CardContent>
       </Card>
+
+      {/* Timezone Information */}
+      <TimezoneInfo className="mb-4" />
 
       {/* KPI Cards - Grouped Modern Layout with All KPIs */}
       {/* Group 1: Revenue & Profitability */}
