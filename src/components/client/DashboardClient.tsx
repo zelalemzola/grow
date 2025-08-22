@@ -412,11 +412,29 @@ export default function DashboardClient({
     return sum + ((o.usdAmount || 0) * (feePercent / 100));
   }, 0);
 
+  // Prorate monthly OPEX to the selected date range (assumes 30-day month)
+  const daysInSelectedRange = useMemo(() => {
+    if (!from || !to) return 30;
+    const start = new Date(from + 'T00:00:00Z');
+    const end = new Date(to + 'T00:00:00Z');
+    const startTime = isNaN(start.getTime()) ? new Date(from).getTime() : start.getTime();
+    const endTime = isNaN(end.getTime()) ? new Date(to).getTime() : end.getTime();
+    if (!isFinite(startTime) || !isFinite(endTime)) return 30;
+    const diffMs = Math.max(0, endTime - startTime);
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1; // inclusive range
+    return Math.max(1, days);
+  }, [from, to]);
+
+  const proratedOpexForRange = useMemo(() => {
+    const monthlyOpex = Number.isFinite(opex) ? opex : 0;
+    return (monthlyOpex / 30) * daysInSelectedRange;
+  }, [opex, daysInSelectedRange]);
+
   // Net Profit calculation - moved here after totalPaymentProcessingFees is calculated
   let calculatedNetProfit = 0;
   if (kpiResults) {
     // Total Profit = Total Sales - OPEX - COGS - Marketing Spend - Total Payment Processing Fees
-    calculatedNetProfit = kpiGrossRevenue - opex - totalCogs - (kpiResults.marketingSpend ?? 0) - totalPaymentProcessingFees;
+    calculatedNetProfit = kpiGrossRevenue - proratedOpexForRange - totalCogs - (kpiResults.marketingSpend ?? 0) - totalPaymentProcessingFees;
   }
 
   // Unique payment methods and their order counts
