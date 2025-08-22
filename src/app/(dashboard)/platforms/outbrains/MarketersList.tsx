@@ -46,7 +46,7 @@ export default function MarketersList({ onSelect, selectedMarketerId }: { onSele
           className="border px-2 py-1 rounded text-sm w-full max-w-xs"
         />
       </div>
-      <ScrollArea className="max-h-120">
+      <ScrollArea className="max-h-64">
         <ul className="space-y-1">
           {marketers.map((marketer: any) => (
             <li key={marketer.id}>
@@ -56,7 +56,7 @@ export default function MarketersList({ onSelect, selectedMarketerId }: { onSele
               >
                 <User className="h-4 w-4" />
                 <span className="font-medium truncate">{marketer.name}</span>
-                {/* <span className="ml-2 text-xs text-muted-foreground truncate">ID: {marketer.id}</span> */}
+                <span className="ml-2 text-xs text-muted-foreground truncate">ID: {marketer.id}</span>
                 {selectedMarketerId === marketer.id && <Badge variant="default" className="ml-auto flex items-center gap-1"><CheckCircle className="h-3 w-3" />Selected</Badge>}
               </button>
             </li>
