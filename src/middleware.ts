@@ -1,31 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-// We cannot import Clerk at the top level because it throws when secretKey is missing.
-// Dynamically import and enable Clerk only when keys are present at runtime.
-export default async function middleware(req: NextRequest) {
-  const hasClerkSecret = Boolean(process.env.CLERK_SECRET_KEY)
-  if (!hasClerkSecret) {
-    return NextResponse.next()
-  }
 
-  const { clerkMiddleware, createRouteMatcher } = await import('@clerk/nextjs/server')
-  const isPublicRoute = createRouteMatcher([
-    '/',
-    '/sign-in(.*)',
-    '/api/(.*)',
-    '/trpc/(.*)'
-  ])
+const isPublicRoute = createRouteMatcher(['/','/sign-in(.*)'])
 
-  const handler = clerkMiddleware(async (auth, request) => {
-    if (!isPublicRoute(request)) {
+export default clerkMiddleware(async (auth, req) => {
+    if (!isPublicRoute(req)) {
       await auth.protect()
     }
   })
-
-  // Call the generated handler
-  // @ts-ignore - Clerk returns a function compatible with Next middleware handler
-  return handler(req)
-}
 
 export const config = {
   matcher: [
