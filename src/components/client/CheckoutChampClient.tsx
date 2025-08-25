@@ -361,55 +361,59 @@ export default function CheckoutChampClient({
   const enhancedOrders = correlateOrdersWithAdSpend(orders, adSpend);
 
   // Map API fields to UI fields for calculations and table
-  const mappedOrders = enhancedOrders.map((o: any) => {
-    // Extract SKUs and upsell info from items
-    let sku = '-';
-    let upsell = false;
-    if (o.items && typeof o.items === 'object') {
-      const itemsArr = Object.values(o.items);
-      sku = itemsArr.map((item: any) => item.productSku).filter(Boolean).join(', ');
-      upsell = itemsArr.some((item: any) => item.productType === 'UPSALE');
-    } else if (typeof o.sku === 'string') {
-      sku = o.sku;
-    }
-    // Currency conversion logic
-    const isEUR = o.currencyCode === 'EUR' || o.currencySymbol === '€';
-    // Use dynamic rate
-    const EUR_TO_USD = eurToUsdRate;
-    // Get raw values
-    const rawTotal = o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : (o.price !== undefined && o.price !== null ? Number(o.price) : 0);
-    const rawUsdAmount = o.usdAmount !== undefined && o.usdAmount !== null ? Number(o.usdAmount) : (o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : 0);
-    const rawRefund = o.refund !== undefined && o.refund !== null ? Number(o.refund) : 0;
-    const rawChargeback = o.chargeback !== undefined && o.chargeback !== null ? Number(o.chargeback) : 0;
-    const rawAttributedSpend = o.attributedSpend !== undefined && o.attributedSpend !== null ? Number(o.attributedSpend) : 0;
-    // Convert if needed
-    const total = isEUR ? rawTotal * EUR_TO_USD : rawTotal;
-    const usdAmount = isEUR ? rawUsdAmount * EUR_TO_USD : rawUsdAmount;
-    const refund = isEUR ? rawRefund * EUR_TO_USD : rawRefund;
-    const chargeback = isEUR ? rawChargeback * EUR_TO_USD : rawChargeback;
-    const attributedSpend = isEUR ? rawAttributedSpend * EUR_TO_USD : rawAttributedSpend;
-    return {
-      orderId: o.orderId || o.clientOrderId || '-',
-      date: o.dateCreated || '-',
-      sku,
-      quantity: o.quantity || (o.items ? Object.values(o.items).reduce((sum: number, item: any) => sum + (item.quantity ? Number(item.quantity) : 0), 0) : 1),
-      total,
-      usdAmount,
-      paymentMethod: o.paymentMethod || o.paySource || '-',
-      paySource: o.paySource || o.paymentMethod || '-', // <-- Add paySource for linter fix
-      refund,
-      chargeback,
-      upsell: upsell ? 'Yes' : 'No',
-      country: o.country || o.shipCountry || '-',
-      brand: o.campaignName || o.campaignCategoryName || '-',
-      utmSource: o.utmSource || '-',
-      utmMedium: o.utmMedium || '-',
-      utmCampaign: o.utmCampaign || '-',
-      attributedPlatform: o.attributedPlatform || '-',
-      attributedSpend,
-      roas: o.roas ? `${(o.roas * 100).toFixed(2)}%` : '-',
-    };
-  });
+  // Map API fields to UI fields for calculations and table
+  // Filter out orders with quantity 0 before mapping
+  const mappedOrders = enhancedOrders
+    .filter((o: any) => o.quantity !== 0 && o.quantity !== '0')
+    .map((o: any) => {
+      // Extract SKUs and upsell info from items
+      let sku = '-';
+      let upsell = false;
+      if (o.items && typeof o.items === 'object') {
+        const itemsArr = Object.values(o.items);
+        sku = itemsArr.map((item: any) => item.productSku).filter(Boolean).join(', ');
+        upsell = itemsArr.some((item: any) => item.productType === 'UPSALE');
+      } else if (typeof o.sku === 'string') {
+        sku = o.sku;
+      }
+      // Currency conversion logic
+      const isEUR = o.currencyCode === 'EUR' || o.currencySymbol === '€';
+      // Use dynamic rate
+      const EUR_TO_USD = eurToUsdRate;
+      // Get raw values
+      const rawTotal = o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : (o.price !== undefined && o.price !== null ? Number(o.price) : 0);
+      const rawUsdAmount = o.usdAmount !== undefined && o.usdAmount !== null ? Number(o.usdAmount) : (o.totalAmount !== undefined && o.totalAmount !== null ? Number(o.totalAmount) : 0);
+      const rawRefund = o.refund !== undefined && o.refund !== null ? Number(o.refund) : 0;
+      const rawChargeback = o.chargeback !== undefined && o.chargeback !== null ? Number(o.chargeback) : 0;
+      const rawAttributedSpend = o.attributedSpend !== undefined && o.attributedSpend !== null ? Number(o.attributedSpend) : 0;
+      // Convert if needed
+      const total = isEUR ? rawTotal * EUR_TO_USD : rawTotal;
+      const usdAmount = isEUR ? rawUsdAmount * EUR_TO_USD : rawUsdAmount;
+      const refund = isEUR ? rawRefund * EUR_TO_USD : rawRefund;
+      const chargeback = isEUR ? rawChargeback * EUR_TO_USD : rawChargeback;
+      const attributedSpend = isEUR ? rawAttributedSpend * EUR_TO_USD : rawAttributedSpend;
+      return {
+        orderId: o.orderId || o.clientOrderId || '-',
+        date: o.dateCreated || '-',
+        sku,
+        quantity: o.quantity || (o.items ? Object.values(o.items).reduce((sum: number, item: any) => sum + (item.quantity ? Number(item.quantity) : 0), 0) : 1),
+        total,
+        usdAmount,
+        paymentMethod: o.paymentMethod || o.paySource || '-',
+        paySource: o.paySource || o.paymentMethod || '-', // <-- Add paySource for linter fix
+        refund,
+        chargeback,
+        upsell: upsell ? 'Yes' : 'No',
+        country: o.country || o.shipCountry || '-',
+        brand: o.campaignName || o.campaignCategoryName || '-',
+        utmSource: o.utmSource || '-',
+        utmMedium: o.utmMedium || '-',
+        utmCampaign: o.utmCampaign || '-',
+        attributedPlatform: o.attributedPlatform || '-',
+        attributedSpend,
+        roas: o.roas ? `${(o.roas * 100).toFixed(2)}%` : '-',
+      };
+    });
 
   // Unique values for filters and popovers
   const uniqueSKUs = Array.from(new Set(
