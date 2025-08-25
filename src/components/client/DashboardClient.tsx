@@ -242,13 +242,8 @@ export default function DashboardClient({
     const isEUR = entry.currencyCode === 'EUR' || entry.currencySymbol === '€';
     
     // Debug logging for order status filtering
-    if (entry.orderStatus !== 'COMPLETE') {
-      // console.log('🔍 Filtered out order:', {
-      //   orderId: entry.orderId,
-      //   orderStatus: entry.orderStatus,
-      //   dateCreated: entry.dateCreated,
-      //   totalAmount: entry.totalAmount
-      // });
+    if (entry.orderStatus !== 'COMPLETE' || entry.quantity === 0 || entry.quantity === '0') {
+      // Exclude test orders with quantity 0
       return undefined;
     }
     

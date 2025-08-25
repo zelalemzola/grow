@@ -165,54 +165,60 @@ const fetchAdSpendData = async (filters: DashboardFilters): Promise<AdSpendEntry
 // Correlate orders with ad spend data
 const correlateOrdersWithAdSpend = (orders: Order[], adSpend: AdSpendEntry[]): EnhancedOrder[] => {
   const knownPlatforms = ['outbrain', 'taboola', 'adup'];
-  return orders.map((order: any) => {
-    const enhancedOrder: EnhancedOrder = {
-      ...order,
-      utmSource: order.UTMSource || order.utmSource || null,
-      utmMedium: order.UTMMedium || order.utmMedium || null,
-      utmCampaign: order.UTMCampaign || order.utmCampaign || null,
-      utmTerm: order.UTMTerm || order.utmTerm || null,
-      utmContent: order.UTMContent || order.utmContent || null,
-      campaignName: order.campaignName || null,
-      funnelReferenceId: order.funnelReferenceId || null,
-    };
+  return orders
+    .map((order: any) => {
+      const enhancedOrder: EnhancedOrder = {
+        ...order,
+        utmSource: order.UTMSource || order.utmSource || null,
+        utmMedium: order.UTMMedium || order.utmMedium || null,
+        utmCampaign: order.UTMCampaign || order.utmCampaign || null,
+        utmTerm: order.UTMTerm || order.utmTerm || null,
+        utmContent: order.UTMContent || order.utmContent || null,
+        campaignName: order.campaignName || null,
+        funnelReferenceId: order.funnelReferenceId || null,
+      };
 
-    // 1. Use utmSource for direct attribution if possible
-    const utmSource = (enhancedOrder.utmSource || '').toLowerCase();
-    if (knownPlatforms.includes(utmSource)) {
-      enhancedOrder.attributedPlatform = utmSource.charAt(0).toUpperCase() + utmSource.slice(1);
-      // Optionally, try to find spend for this platform
-      const spendEntry = adSpend.find(spend => spend.platform.toLowerCase() === utmSource);
-      if (spendEntry) {
-        enhancedOrder.attributedSpend = spendEntry.spend;
-        enhancedOrder.roas = (enhancedOrder.usdAmount && spendEntry.spend)
-          ? enhancedOrder.usdAmount / spendEntry.spend
+      // Exclude test orders with quantity 0
+      if (order.quantity === 0 || order.quantity === '0') {
+        return undefined;
+      }
+      // 1. Use utmSource for direct attribution if possible
+      const utmSource = (enhancedOrder.utmSource || '').toLowerCase();
+      if (knownPlatforms.includes(utmSource)) {
+        enhancedOrder.attributedPlatform = utmSource.charAt(0).toUpperCase() + utmSource.slice(1);
+        // Optionally, try to find spend for this platform
+        const spendEntry = adSpend.find(spend => spend.platform.toLowerCase() === utmSource);
+        if (spendEntry) {
+          enhancedOrder.attributedSpend = spendEntry.spend;
+          enhancedOrder.roas = (enhancedOrder.usdAmount && spendEntry.spend)
+            ? enhancedOrder.usdAmount / spendEntry.spend
+            : undefined;
+        }
+        return enhancedOrder;
+      }
+
+      // 2. Otherwise, use existing matching logic
+      const matchingAdSpend = adSpend.find(spend => {
+        // Match by marketerId/advertiserId if present
+        if (order.marketerId && spend.marketerId && order.marketerId === spend.marketerId) return true;
+        if (order.advertiserId && spend.advertiserId && order.advertiserId === spend.advertiserId) return true;
+        // Match by campaign name (case-insensitive, partial)
+        if (order.campaignName && spend.campaignName &&
+            order.campaignName.toLowerCase().includes(spend.campaignName.toLowerCase())) return true;
+        return false;
+      });
+
+      if (matchingAdSpend) {
+        enhancedOrder.attributedPlatform = matchingAdSpend.platform;
+        enhancedOrder.attributedSpend = matchingAdSpend.spend;
+        enhancedOrder.roas = (enhancedOrder.usdAmount && matchingAdSpend.spend)
+          ? enhancedOrder.usdAmount / matchingAdSpend.spend
           : undefined;
       }
+
       return enhancedOrder;
-    }
-
-    // 2. Otherwise, use existing matching logic
-    const matchingAdSpend = adSpend.find(spend => {
-      // Match by marketerId/advertiserId if present
-      if (order.marketerId && spend.marketerId && order.marketerId === spend.marketerId) return true;
-      if (order.advertiserId && spend.advertiserId && order.advertiserId === spend.advertiserId) return true;
-      // Match by campaign name (case-insensitive, partial)
-      if (order.campaignName && spend.campaignName &&
-          order.campaignName.toLowerCase().includes(spend.campaignName.toLowerCase())) return true;
-      return false;
-    });
-
-    if (matchingAdSpend) {
-      enhancedOrder.attributedPlatform = matchingAdSpend.platform;
-      enhancedOrder.attributedSpend = matchingAdSpend.spend;
-      enhancedOrder.roas = (enhancedOrder.usdAmount && matchingAdSpend.spend)
-        ? enhancedOrder.usdAmount / matchingAdSpend.spend
-        : undefined;
-    }
-
-    return enhancedOrder;
-  });
+    })
+    .filter((order): order is EnhancedOrder => !!order);
 };
 
 export default function CheckoutChampClient({ 

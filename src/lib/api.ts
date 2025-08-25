@@ -439,8 +439,10 @@ export const fetchCheckoutChampOrders = async (
       }
     }
     
-    console.log(`🎉 CheckoutChamp fetch completed. Total orders: ${allOrders.length}`);
-    return allOrders;
+  // Filter out test orders with quantity 0
+  const filteredOrders = allOrders.filter(order => order.quantity !== 0 && order.quantity !== '0');
+  console.log(`🎉 CheckoutChamp fetch completed. Total real orders: ${filteredOrders.length}`);
+  return filteredOrders;
     
   } catch (error) {
     console.error('❌ Error fetching Checkout Champ orders:', error);
