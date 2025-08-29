@@ -2,6 +2,7 @@
 
 export interface Order {
   orderId: string;
+  orderStatus: string;
   date: string;
   sku: string;
   quantity: number;

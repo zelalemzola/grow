@@ -251,7 +251,7 @@ export default function CheckoutChampClient({
     staleTime: 24 * 60 * 60 * 1000, // 1 day
     retry: 1,
   });
-  const eurToUsdRate: number = eurToUsdRateData || 1.08; // Use API rate or conservative fallback
+  const eurToUsdRate: number = eurToUsdRateData || 1.16; // Use API rate or conservative fallback
 
   // Use initial orders data with proper caching and revalidation
   const { data: ordersData, isLoading: ordersLoading, error: ordersError, isRefetching: ordersRefetching, refetch: refetchOrders } = useQuery<Order[]>({
@@ -394,6 +394,7 @@ export default function CheckoutChampClient({
       const attributedSpend = isEUR ? rawAttributedSpend * EUR_TO_USD : rawAttributedSpend;
       return {
         orderId: o.orderId || o.clientOrderId || '-',
+        orderStatus: o.orderStatus || '-',
         date: o.dateCreated || '-',
         sku,
         quantity: o.quantity || (o.items ? Object.values(o.items).reduce((sum: number, item: any) => sum + (item.quantity ? Number(item.quantity) : 0), 0) : 1),

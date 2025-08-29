@@ -29,8 +29,9 @@ function calculateTotalCogs(products: Record<string, COGSProduct>) {
 // Helper function to aggregate products from orders
 function aggregateProductsFromOrders(orders: Order[]): COGSProduct[] {
   const map: Record<string, COGSProduct> = {};
+  const completedOrders = orders.filter(order => order.orderStatus === 'COMPLETE');
   
-  for (const order of orders) {
+  for (const order of completedOrders) {
     if (!order.items) continue;
     for (const item of Object.values(order.items) as any[]) {
       const sku = (item.productSku || '').trim().toUpperCase();

@@ -273,6 +273,7 @@ export default function DashboardClient({
     
     return {
       orderId: typeof entry.orderId === 'string' ? entry.orderId : (entry.orderId ? String(entry.orderId) : ''),
+      orderStatus: typeof entry.orderStatus === 'string' ? entry.orderStatus : (entry.orderStatus ? String(entry.orderStatus) : ''),
       date: typeof entry.dateCreated === 'string' ? entry.dateCreated : (entry.dateCreated ? String(entry.dateCreated) : ''),
       sku: typeof entry.sku === 'string' ? entry.sku : (entry.sku ? String(entry.sku) : ''),
       quantity: typeof entry.quantity === 'number' ? entry.quantity : (entry.quantity ? Number(entry.quantity) : 1),
